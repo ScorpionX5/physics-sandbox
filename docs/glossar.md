@@ -13,7 +13,7 @@ welcher der richtige ist.
 
 | Deutsch | Identifier | Bedeutung |
 |---|---|---|
-| **Material** | `Material` | Stoffliche Definition *ohne* Ort, Menge und Form: Eisen, Holz, Sauerstoff. Trägt Daten für alle Darstellungsebenen plus Simulationsgrößen, nach Physikdomäne gruppiert (`mechanical`, `thermal`, `chemical`). Nur `mechanical` ist Pflicht. Wird nicht platziert, sondern einem Körper oder einer Ebene zugewiesen (`BodySpec.materialId`, `ConstraintSpec.materialId`). **Standard** (`STANDARD`, 1000 kg/m³, grau) ist das erste Material der Startbibliothek und damit das Material jedes neu angelegten Körpers und jeder neuen Ebene. |
+| **Material** | `Material` | Stoffliche Definition *ohne* Ort, Menge und Form: Eisen, Holz, Sauerstoff. Trägt Daten für alle Darstellungsebenen plus Simulationsgrößen, nach Physikdomäne gruppiert (`mechanical`, `thermal`, `chemical`). Nur `mechanical` ist Pflicht. Wird nicht platziert, sondern einem Körper oder einer Ebene zugewiesen (`BodySpec.materialId`, `ConstraintSpec.materialId`). **Standard** (`STANDARD`, 1000 kg/m³, grau, Stoßzahl 0) ist das erste Material der Startbibliothek und damit das Material jedes neu angelegten Körpers und jeder neuen Ebene. |
 | **Körper** (Bibliothekseintrag) | `Body` | Eine Form *ohne* Material, Ort und Größe — die Unterklasse steht in `behaviour.bodyType`. Bewusst ohne eigene Farbe: wie ein Körper aussieht, bestimmt sein Material. |
 | **Quader** | `CUBOID`, `bodyType: "cuboid"` | Der einzige Körper der Bibliothek, eine Unterklasse von Körper. Die halben Kantenlängen am Eintrag sind nur die Voreinstellung beim Platzieren; die Größe steht an der Instanz (`BodySpec.phase.shape`). |
 | **Randbedingung** | `Constraint` | Nicht-stoffliche Entität, die einer anderen Entität eine Lage oder Bewegung aufzwingt. Stufe 1 kennt `staticSurface` (unbewegliche Flächen). Bewusst ohne eigene Farbe: die Optik kommt vom Material der platzierten Instanz. |
@@ -61,7 +61,9 @@ welcher der richtige ist.
 | **Drehimpuls** | `angularMomentum` | Der intern geführte Rotationszustand. Winkelgeschwindigkeit wird daraus abgeleitet — siehe [Architektur](architektur.md#rotation). |
 | **Kraftgesetz** | `ForceLaw` | Ein Beitrag zur Kraft- und Drehmomentsumme. Stufe 1: Schwerkraft aus den platzierten Gravitations-Lasten. |
 | **Kontakt** | `Contact` | Eine erkannte Berührung: Segment und Durchdringungstiefe. |
-| **Stoßzahl** | `restitution` | 0 = kein Zurückprallen, 1 = idealelastisch. Bei einer Paarung gilt das Minimum. |
+| **Stoßzahl** | `restitution` | 0 = kein Zurückprallen, 1 = idealelastisch. Eigenschaft des **Materials** (`Material.mechanical.restitution`); die Ebene hat keine eigene, sie nimmt die ihres Materials. Gilt für jeden Stoß — Körper gegen Körper wie Körper gegen Ebene — als **Minimum der beiden Materialien**: Standard (0) macht jede Paarung unelastisch, zwei gleiche Materialien prallen mit ihrer eigenen Zahl. |
+| **Ruheschwelle** | `REST_THRESHOLD_STEPS` | Aufprallgeschwindigkeit, unterhalb der ein Kontakt als Ruhe gilt und die Stoßzahl 0 ist: zehn Schritte Schwerkraft (10 · g · dt mit dem Betrag g der Schwerebeschleunigung; bei Erdschwere und 1 ms knapp 0,1 m/s). Verhindert, dass ein aufliegender Körper mit Stoßzahl > 0 in Mikrometern hüpft und seinen Kontakt in jedem zweiten Schritt verliert. |
+| **Überlappung** | `Overlap` | Ergebnis des Geometrietests zweier Körper: Kontaktnormale (von Körper a nach b) und Eindringtiefe. Bewusst ohne Kontaktpunkt — der Stoßimpuls greift am Schwerpunkt an (Stufe 1). |
 | **Festgehalten** | `kinematic` | Nimmt an Kontakten teil, wird aber nicht von Kräften bewegt. |
 
 ---

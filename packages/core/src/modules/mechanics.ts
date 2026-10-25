@@ -1,3 +1,4 @@
+import { createOverlap, overlapBodies } from "../collision.js";
 import type { ModuleContext, PhysicsModule } from "../pipeline.js";
 import {
   boxCornersLocal,
@@ -72,6 +73,27 @@ const PENETRATION_LIMIT_FACTOR = 2;
 
 /** Ab welcher Durchdringung (relativ zur Koerpergroesse) eine Warnung in die Aufzeichnung geht. */
 const PENETRATION_WARNING_FACTOR = 0.1;
+
+/**
+ * Bis zu welcher Aufprallgeschwindigkeit ein Kontakt als Ruhe gilt, in
+ * Vielfachen dessen, was die Schwerkraft in einem Zeitschritt dazugibt
+ * (|g| * dt).
+ *
+ * Ein Koerper, der auf einer Flaeche liegt, wird in jedem Schritt um genau
+ * g*dt in sie hineinbeschleunigt. Mit Stosszahl > 0 gaebe jeder Kontakt davon
+ * den Anteil e zurueck, und der Koerper huepfte fuer immer in Mikrometern, statt
+ * liegenzubleiben. Unterhalb der Schwelle wird deshalb wie bei Stosszahl 0
+ * aufgeloest. Zehn Schritte Schwerkraft, nicht einer: in einem Stapel loest
+ * jede Lage ihren Kontakt nach der darueber, und der Rest, den die obere dabei
+ * behaelt, waechst mit der Stapelhoehe. Die Schwelle muss darueber liegen, sonst
+ * huepft der oberste Koerper eines Stapels. Bei g = 9,81 m/s^2 und 1 ms sind
+ * das knapp 0,1 m/s - ein Rueckprall in der Groesse eines Millimeters.
+ *
+ * An |g| gebunden statt eine feste Zahl: ohne Schwerkraft gibt es keine Ruhe
+ * zu unterscheiden, und ein langsamer Stoss im Schwerefreien prallt dann wie
+ * jeder andere ab.
+ */
+const REST_THRESHOLD_STEPS = 10;
 
 // Arbeitsspeicher auf Modulebene. Der Integrator laeuft bei dt = 1 ms
 // tausendfach pro simulierter Sekunde; frische Arrays pro Aufruf waeren
@@ -171,6 +193,111 @@ function collectContacts(body: RuntimeBody, surface: RuntimeSurface, into: Map<s
       scratchCorner[1] += body.mechanics.position[1];
       scratchCorner[2] += body.mechanics.position[2];
       testPoint(scratchCorner, 0, segment);
+    }
+  }
+}
+
+/** Arbeitsliste der Koerper eines Zeitschritts - dieselbe Begruendung wie bei den Matrizen oben. */
+const scratchBodies: RuntimeBody[] = [];
+const scratchOverlap = createOverlap();
+
+function bodiesOf(state: SimState, into: RuntimeBody[]): RuntimeBody[] {
+  into.length = 0;
+  for (const entity of state.entities.values()) {
+    if (entity.kind === "body") into.push(entity);
+  }
+  return into;
+}
+
+/**
+ * Stosszahl einer Paarung: das Minimum der beiden Materialien.
+ *
+ * Physikalisch gehoert die Stosszahl zur Paarung, nicht zu einem Stoff; das
+ * Minimum ist die einfachste Regel, die das Naheliegende liefert: Standard
+ * (0) macht jeden Stoss unelastisch, zwei gleiche Materialien prallen mit ihrer
+ * eigenen Zahl. Unterhalb der Ruheschwelle gilt 0, siehe `REST_THRESHOLD_STEPS`.
+ */
+function pairRestitution(
+  a: { restitution: number },
+  b: { restitution: number },
+  impactSpeed: number,
+  restSpeed: number,
+): number {
+  return impactSpeed < restSpeed ? 0 : Math.min(a.restitution, b.restitution);
+}
+
+/** Geschwindigkeit eines Koerpers entlang `normal`; ein festgehaltener steht, was auch in seinem Feld steht. */
+function speedAlong(body: RuntimeBody, normal: readonly number[]): number {
+  return body.kinematic ? 0 : v3dot(body.mechanics.linearVelocity, normal);
+}
+
+/**
+ * Loest alle Beruehrungen zwischen Koerpern auf.
+ *
+ * Wie bei der Flaeche: ein Impuls entlang der Kontaktnormale am Schwerpunkt,
+ * kein Drehmoment, keine Tangentialwirkung (reibungsfrei). Der Impuls verteilt
+ * sich nach den Massen:
+ *
+ *   j = -(1 + e) * v_rel / (1/m_a + 1/m_b),   v_rel = (v_b - v_a) . n
+ *
+ * Impuls und - bei e = 1 - Energie bleiben dabei exakt erhalten; ein
+ * festgehaltener Koerper (1/m = 0) nimmt nichts auf und verhaelt sich wie eine
+ * Wand. Die Lagekorrektur teilt die Eindringtiefe im selben Verhaeltnis auf.
+ */
+function resolveBodyPairs(
+  list: readonly RuntimeBody[],
+  restSpeed: number,
+  t: number,
+  emit: ModuleContext["emit"],
+): void {
+  for (let i = 0; i < list.length; i += 1) {
+    const a = list[i]!;
+    for (let j = i + 1; j < list.length; j += 1) {
+      const b = list[j]!;
+      const weightSum = a.inverseMass + b.inverseMass;
+      // Zwei festgehaltene Koerper koennen nichts bewegen.
+      if (weightSum === 0) continue;
+
+      // Grobtest ueber die umschliessenden Kugeln, bevor die Trennachsen laufen.
+      const dx = b.mechanics.position[0] - a.mechanics.position[0];
+      const dy = b.mechanics.position[1] - a.mechanics.position[1];
+      const dz = b.mechanics.position[2] - a.mechanics.position[2];
+      const reach = a.boundingRadius + b.boundingRadius;
+      if (dx * dx + dy * dy + dz * dz >= reach * reach) continue;
+      if (!overlapBodies(a, b, scratchOverlap)) continue;
+
+      const { normal, depth } = scratchOverlap;
+      const smaller = Math.min(a.boundingRadius, b.boundingRadius);
+      // Dieselbe Tunnel-Grenze wie bei der Flaeche: so tief ineinander ist kein
+      // Kontakt mehr, sondern ein Durchgetunnelter, und den zurueckzuschieben
+      // wuerde den Fehler verstecken.
+      if (depth > PENETRATION_LIMIT_FACTOR * smaller) continue;
+
+      a.mechanics.contactCount += 1;
+      b.mechanics.contactCount += 1;
+
+      const approach = speedAlong(b, normal) - speedAlong(a, normal);
+      if (approach < 0) {
+        const restitution = pairRestitution(a, b, -approach, restSpeed);
+        const impulse = (-(1 + restitution) * approach) / weightSum;
+        v3addScaled(a.mechanics.linearVelocity, normal, -impulse * a.inverseMass);
+        v3addScaled(b.mechanics.linearVelocity, normal, impulse * b.inverseMass);
+      }
+
+      v3addScaled(a.mechanics.position, normal, (-depth * a.inverseMass) / weightSum);
+      v3addScaled(b.mechanics.position, normal, (depth * b.inverseMass) / weightSum);
+
+      if (depth > PENETRATION_WARNING_FACTOR * smaller) {
+        emit({
+          t,
+          type: "warning",
+          entityId: a.id,
+          message:
+            `Durchdringung von ${depth.toFixed(4)} m mit ${b.id} - mehr als ` +
+            `${(PENETRATION_WARNING_FACTOR * 100).toFixed(0)} % der Koerpergroesse. ` +
+            `Zeitschritt zu gross oder Geschwindigkeit zu hoch.`,
+        });
+      }
     }
   }
 }
@@ -285,9 +412,18 @@ export function createMechanicsModule(): PhysicsModule {
      * Rotationsintegration und Kontaktaufloesung gleichzeitig zu entwickeln
      * verzoegert beides.
      */
-    contacts({ state, emit }) {
-      for (const entity of state.entities.values()) {
-        if (entity.kind !== "body" || entity.kinematic) continue;
+    contacts({ state, dt, emit }) {
+      const gravity = totalGravity(state, scratchGravity);
+      const restSpeed = REST_THRESHOLD_STEPS * Math.sqrt(v3dot(gravity, gravity)) * dt;
+
+      // Koerper gegen Koerper zuerst, Flaechen zuletzt: die Lagekorrektur eines
+      // Paars kann einen Koerper in eine Flaeche druecken, und die Flaeche muss
+      // das letzte Wort haben - nichts darf aus ihr herausragen.
+      const present = bodiesOf(state, scratchBodies);
+      resolveBodyPairs(present, restSpeed, state.t, emit);
+
+      for (const entity of present) {
+        if (entity.kinematic) continue;
         const found = contactsByBody.get(entity.id) ?? new Map<string, Contact>();
         contactsByBody.set(entity.id, found);
         found.clear();
@@ -297,18 +433,18 @@ export function createMechanicsModule(): PhysicsModule {
           collectContacts(entity, other, found);
         }
 
-        entity.mechanics.contactCount = found.size;
+        entity.mechanics.contactCount += found.size;
         if (found.size === 0) continue;
 
         const warningDepth = PENETRATION_WARNING_FACTOR * entity.boundingRadius;
         for (const contact of found.values()) {
           const normal = contact.segment.normal;
-          const restitution = Math.min(entity.restitution, contact.surface.restitution);
 
           const normalSpeed = v3dot(entity.mechanics.linearVelocity, normal);
           if (normalSpeed < 0) {
             // v -= (1 + e) * v_n * n: entfernt die Normalkomponente und gibt
             // bei e > 0 den entsprechenden Anteil zurueck.
+            const restitution = pairRestitution(entity, contact.surface, -normalSpeed, restSpeed);
             v3addScaled(entity.mechanics.linearVelocity, normal, -(1 + restitution) * normalSpeed);
           }
 

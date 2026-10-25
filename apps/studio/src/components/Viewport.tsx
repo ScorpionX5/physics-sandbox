@@ -141,7 +141,7 @@ export const Viewport = forwardRef<ViewportHandle, ViewportProps>(function Viewp
       // zurueck auf die Standardwerte. Der Betrachter tut das nicht von
       // selbst, weil eine Bearbeitung die Aufzeichnung genauso austauscht -
       // dort muss die Kamera stehen bleiben.
-      viewer.frameScene();
+      viewer.frameScene("initial");
       // Eine mitgespeicherte Kamera geht vor dem Einpassen.
       const savedCamera = recording.scenario.view.camera;
       if (savedCamera) viewer.setCameraPose(savedCamera);

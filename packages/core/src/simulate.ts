@@ -138,6 +138,16 @@ export class Simulator {
     return body;
   }
 
+  /**
+   * Material und Stosszahl einer Ebene. Eine Stelle fuer Anlegen und Aendern,
+   * wie `bodyProperties`: nach einem Materialwechsel prallt ein Koerper sonst
+   * noch mit der alten Stosszahl ab.
+   */
+  private surfaceMaterial(spec: Extract<EntitySpec, { kind: "constraint" }>) {
+    const material = this.library.material(spec.materialId);
+    return { materialId: spec.materialId, material, restitution: material.mechanical.restitution };
+  }
+
   private createSurface(spec: Extract<EntitySpec, { kind: "constraint" }>): RuntimeSurface {
     const constraint = this.library.constraint(spec.constraintId);
     if (constraint.behaviour.constraintType !== "staticSurface") {
@@ -162,7 +172,7 @@ export class Simulator {
       segments: resolveSegments(localSegments, position, orientation),
       position,
       orientation,
-      restitution: constraint.behaviour.restitution,
+      ...this.surfaceMaterial(spec),
     };
   }
 
@@ -295,6 +305,7 @@ export class Simulator {
       // Lageaenderung muessen die Weltkoordinaten der Segmente neu
       // berechnet werden, sonst kollidiert der Koerper mit der alten Lage.
       entity.segments = resolveSegments(entity.localSegments, entity.position, entity.orientation);
+      Object.assign(entity, this.surfaceMaterial(spec));
       return;
     }
 

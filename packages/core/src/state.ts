@@ -110,6 +110,9 @@ export interface RuntimeSurface {
   localSegments: SurfaceSegment[];
   position: V3;
   orientation: Q4;
+  materialId: string;
+  material: Material;
+  /** Aus dem Material der Ebene, nicht aus dem Bibliothekseintrag. */
   restitution: number;
 }
 

@@ -28,7 +28,10 @@ import { Finite, HexColor, Id, Vec3 } from "./primitives.js";
 export const MechanicalProperties = z.object({
   /** kg/m^3. Zusammen mit dem Volumen des Koerpers ergibt sie die Masse. */
   density: Finite.positive(),
-  /** Stosszahl: 0 = kein Zurueckprallen, 1 = idealelastisch. */
+  /**
+   * Stosszahl: 0 = kein Zurueckprallen, 1 = idealelastisch. Gilt fuer jede
+   * Paarung (Koerper-Koerper, Koerper-Ebene) als Minimum der beiden Materialien.
+   */
   restitution: Finite.min(0).max(1),
   /** Haftreibungskoeffizient - Stufe 2, noch von keinem Modul gelesen. */
   staticFriction: Finite.min(0).optional(),
@@ -177,12 +180,17 @@ export const SurfaceSegment = z.object({
 });
 export type SurfaceSegment = z.infer<typeof SurfaceSegment>;
 
-/** Unbewegliche Flaeche - die schiefe Ebene mit Auslauf. */
+/**
+ * Unbewegliche Flaeche - die schiefe Ebene mit Auslauf.
+ *
+ * Ohne eigene Stosszahl: sie kommt vom Material der platzierten Instanz
+ * (`ConstraintSpec.materialId`), wie die Farbe. Eine Stosszahl am Eintrag waere
+ * eine zweite Quelle, die das Material uebergeht. Aeltere Dateien mit dem Feld
+ * werden gelesen, das Feld faellt beim Parsen weg.
+ */
 export const StaticSurfaceConstraint = z.object({
   constraintType: z.literal("staticSurface"),
   segments: z.array(SurfaceSegment).min(1).max(64),
-  /** Stosszahl der Flaeche. Mit der des Koerpers wird das Minimum genommen. */
-  restitution: Finite.min(0).max(1).default(0),
 });
 
 export const ConstraintBehaviour = z.discriminatedUnion("constraintType", [

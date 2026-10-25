@@ -7,6 +7,7 @@ import {
   checkElementBalance,
   createEmptyScenario,
   createInclinedPlaneScenario,
+  Constraint as ConstraintSchema,
   CUBOID,
   electronConfiguration,
   ELEMENTS,
@@ -291,7 +292,6 @@ describe("Pruefung der Bibliothekseintraege", () => {
       ...PLANE,
       behaviour: {
         constraintType: "staticSurface" as const,
-        restitution: 0,
         segments: segments.map((s: (typeof segments)[number]) => ({
           ...s,
           normal: [s.normal[0] * 3, s.normal[1] * 3, s.normal[2] * 3] as [number, number, number],
@@ -317,7 +317,6 @@ describe("Pruefung der Bibliothekseintraege", () => {
         ...PLANE,
         behaviour: {
           constraintType: "staticSurface" as const,
-          restitution: 0,
           segments: [
             {
               id: "schief",
@@ -350,6 +349,22 @@ describe("Pruefung der Bibliothekseintraege", () => {
       asLibrarian({ ...IRON, mechanical: { ...IRON.mechanical, restitution: 1.5 } }),
     );
     assert.equal(result.ok, false);
+  });
+});
+
+describe("Stosszahl der Ebene", () => {
+  it("liest eine aeltere Randbedingung mit eigener Stosszahl und laesst das Feld fallen", () => {
+    // Die Stosszahl einer Ebene kommt vom Material der Instanz. Dateien aus der
+    // Zeit davor tragen sie noch am Eintrag und muessen trotzdem laden.
+    const old = { ...PLANE, behaviour: { ...PLANE.behaviour, restitution: 0.7 } };
+    const parsed = ConstraintSchema.parse(old);
+    assert.equal("restitution" in parsed.behaviour, false);
+  });
+
+  it("macht Standard unelastisch, damit jede Paarung mit Standard nicht abprallt", () => {
+    const standard = BUILTIN_LIBRARY.find((entry) => entry.definition.id === "standard")!.definition;
+    assert.ok(standard.kind === "material");
+    assert.equal(standard.mechanical.restitution, 0);
   });
 });
 

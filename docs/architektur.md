@@ -147,10 +147,10 @@ deshalb an drei Stellen und nur dort:
 |---|---|
 | `builtin.ts` | Richtung der Standard-Schwerkraft (`earthGravityIntervention`), Normale der Festen Ebene (`[0, 0, 1]`), Neigung der Rampe (Drehung um **y**, nicht um z — eine Drehung um die Hochachse würde die Platte nur herumschwenken) |
 | `scenarioEdits.ts` | Voreinstellung `direction: [0, 0, -1]` in `addLoad` |
-| `viewer.ts` | `camera.up`, die Standardansicht in `frameScene` (`CAMERA_DIRECTION`, `CAMERA_DISTANCE_FACTOR`, `FOCUS_LIFT`), die Lichtrichtungen, die Rückfallebene in `pickPoint` und die Umrechnung der Kugelkoordinaten der Maussteuerung |
+| `viewer.ts` | `camera.up`, die Standardansicht in `frameScene` (`CAMERA_DIRECTION`, `CAMERA_DISTANCE_FACTOR`, `INITIAL_CAMERA_DISTANCE_FACTOR`, `FOCUS_LIFT`), die Lichtrichtungen, die Rückfallebene in `pickPoint` und die Umrechnung der Kugelkoordinaten der Maussteuerung |
 
-Daraus folgt die **Standardansicht**, die *Ansicht einpassen* sowie jedes Laden
-und Zurücksetzen herstellt (`frameScene()`, aufgerufen im `isReset`-Zweig des
+Daraus folgt die **Standardansicht**, die jedes Laden und Zurücksetzen
+herstellt (`frameScene("initial")`, aufgerufen im `isReset`-Zweig des
 Viewports — der Betrachter selbst lässt die Kamera beim Austausch der
 Aufzeichnung bewusst stehen, sonst spränge sie bei jeder Bearbeitung): die Kamera steht über dem positiven x-y-Quadranten, in
 der Waagerechten **15° von der x-Achse weg** (`CAMERA_DIRECTION` in
@@ -160,10 +160,11 @@ meinen. Nicht auf der Winkelhalbierenden, weil dort zwei gleich lange Kanten
 eines Klotzes deckungsgleich erscheinen und nicht mehr zu sehen ist, welche vorn
 liegt; die flache Aufstellung zeigt stattdessen x als die lange Richtung im
 Bild — und das ist die, in die der Klotz des Durchstichs läuft. Der Abstand ist
-das **Doppelte** dessen, was das Szenario gerade formatfüllend zeigt
-(`CAMERA_DISTANCE_FACTOR`) — formatfüllend heißt auch „angeschnitten, sobald
-sich etwas bewegt", und so passt ein Fallversuch samt Flugbahn ins Bild, ohne
-dass man beim ersten Abspielen nachfassen muss. Geblickt wird nicht auf die Mitte des Szenarios, sondern eine halbe
+das **Fünffache** dessen, was das Szenario gerade formatfüllend zeigt
+(`INITIAL_CAMERA_DISTANCE_FACTOR`) — so bleibt Umgebung und Platz zum Bauen im
+Bild. *Ansicht einpassen* (`frameScene()`) rückt dagegen enger heran, auf das
+1,15-Fache (`CAMERA_DISTANCE_FACTOR`): wer sie drückt, will das Szenario
+formatfüllend und hat es mit der Bahn ohnehin vollständig in den Punkten. Geblickt wird nicht auf die Mitte des Szenarios, sondern eine halbe
 Achsenlänge darüber (`FOCUS_LIFT`), wodurch die Szene im Bild tiefer sitzt und
 oben Platz bleibt — dort passiert bei einem Fallversuch das Interessante, und
 dort liegen die Ebenenknöpfe.
@@ -254,6 +255,44 @@ der Klotz die schiefe Ebene hinabbeschleunigt und auf dem Auslauf mit konstanter
 Geschwindigkeit weitergleitet — und warum es den Eingriff bei t = 2 s braucht,
 um ihn anzuhalten.
 
+### Stoßzahl und Körper-Körper-Kontakt
+
+**Die Stoßzahl gehört zur Paarung, gespeichert wird sie am Material.** Physikalisch
+hat nicht „Eisen" eine Stoßzahl, sondern Eisen gegen Stahl. Das Modell nimmt
+trotzdem eine Zahl je Material und verrechnet sie als **Minimum** der beiden
+Beteiligten — für Körper gegen Körper wie für Körper gegen Ebene, die dafür das
+Material ihrer Instanz mitbringt. Das Minimum hat die Eigenschaft, die man für
+das Standardverhalten braucht: Standard hat Stoßzahl 0, also bleibt alles, was
+mit Standard zusammenstößt, liegen, egal aus welchem Material es ist. Ein neues
+Szenario verhält sich damit wie vor den Stoßzahlen.
+
+Der Impuls eines Körperpaars folgt dem zentralen Stoß:
+
+```
+j = −(1 + e) · v_rel / (1/m_a + 1/m_b),   v_rel = (v_b − v_a) · n
+```
+
+Er verteilt sich nach den Massen, der Impuls bleibt erhalten, bei e = 1 auch die
+Energie; ein festgehaltener Körper (`1/m = 0`) wirkt wie eine Wand. Die
+Eindringtiefe wird im selben Verhältnis aufgeteilt. Die Geometrie
+([collision.ts](../packages/core/src/collision.ts)) liefert nur Normale und Tiefe:
+Quader gegen Quader nach dem Satz der Trennachsen (15 Achsen; Flächenachsen haben
+Vorrang vor Kantenachsen, sonst springt die Normale bei fast paralleler Lage),
+dazu Kugel gegen Kugel und Kugel gegen Quader.
+
+**Ruheschwelle.** Ein aufliegender Körper fällt in jedem Schritt um `g·dt` in
+seine Unterlage. Mit e > 0 gäbe jeder Kontakt davon den Anteil e zurück: der
+Körper hüpfte in Mikrometern, und `contactCount` wechselte tausendmal pro
+Sekunde zwischen 0 und 1. Unterhalb von `10 · |g| · dt` (bei Erdschwere und 1 ms
+knapp 0,1 m/s) gilt deshalb e = 0. Die zehn statt eines Schritts kommen vom
+Stapel: jede Lage löst ihren Kontakt nach der darüberliegenden, und der Rest,
+den die obere dabei behält, wächst mit der Höhe. Ohne Schwerkraft ist die
+Schwelle 0 und jeder Stoß prallt ab.
+
+**Reihenfolge.** Erst alle Körperpaare, dann die Ebenen. Die Lagekorrektur eines
+Paars kann einen Körper in eine Ebene drücken; die Ebene hat das letzte Wort,
+damit nichts aus ihr herausragt.
+
 ### Was Stufe 1 bewusst nicht kann
 
 Der Impuls wird am **Schwerpunkt** angesetzt und erzeugt damit kein
@@ -266,6 +305,17 @@ Das ist die sichtbare Seite der Stufe-1b-Lücke und bewusst so: Kipp-Dynamik
 braucht einen iterativen Kontaktlöser, und Rotationsintegration und
 Kontaktauflösung gleichzeitig zu entwickeln verzögert beides.
 
+Dasselbe gilt für Körper gegen Körper, mit drei sichtbaren Folgen:
+
+- Ein Quader, der mit der Kante auf einen anderen fällt, kippt nicht, er
+  bekommt nur den Impuls entlang der Normale. Es gibt auch keinen Kontaktpunkt,
+  nur Normale und Tiefe.
+- Stöße sind reibungsfrei, ein Körper rutscht auf dem anderen ohne Bremse.
+- Ein Stapel wird in einem Durchlauf aufgelöst, ohne Iteration. Die oberen Lagen
+  behalten dadurch eine Restgeschwindigkeit von einigen `g·dt` (bei drei
+  Quadern etwa 0,04 m/s); ihre Lage bleibt exakt, der Geschwindigkeitspfeil der
+  Kinematik-Ebene nicht ganz null.
+
 ### Eigener Löser statt Physik-Engine
 
 Der Durchstich käme auch mit Rapier oder cannon-es zustande. Trotzdem eigener
@@ -277,8 +327,8 @@ Löser:
 2. **Determinismus über Plattformen.** Eine WASM-Engine ist bei gleicher
    Binärversion deterministisch, aber nicht garantiert zwischen Linux-Server und
    Windows-Browser.
-3. **Der Fall ist klein.** Eine Box gegen zwei fixierte Flächen, keine Reibung:
-   rund 150 Zeilen.
+3. **Der Fall ist klein.** Wenige Körper gegen fixierte Flächen und gegeneinander,
+   keine Reibung, Impuls am Schwerpunkt: ein paar hundert Zeilen.
 
 **Umkehrpunkt:** Sobald viele Körper mit Stapeln, Gelenken und bleibenden
 Kontakten dazukommen, ist ein eigener Löser Arbeit, die Rapier schon geleistet
@@ -566,9 +616,9 @@ Wege liefern dasselbe Ergebnis, weil der Kern deterministisch ist.
 
 | Stufe | Inhalt | Neue Kopplung |
 |---|---|---|
-| **1** | Mechanik: Translation, Rotation, Kontakt ohne Reibung | — |
+| **1** | Mechanik: Translation, Rotation, Kontakt ohne Reibung, Stoßzahl (Körper–Körper und Körper–Ebene) | — |
 | **1b** | Kontaktdrehmoment: Kippen, Kantenkontakt, Stapel | Rotation ↔ Kontakt |
-| **2** | Reibung, Stoßzahl > 0, Luftwiderstand | Materialdaten ↔ Mechanik |
+| **2** | Reibung, Luftwiderstand | Materialdaten ↔ Mechanik |
 | **3** | Thermodynamik: Leitung, Strahlung, Konvektion, Phasenübergänge | **Reibungswärme** — Stufe 2 speist Stufe 3 |
 | **4** | Chemie: Reaktionen, Arrhenius-Kinetik, Stoffumsatz | **Temperatur treibt Reaktionsrate** — Stufe 3 speist Stufe 4 |
 

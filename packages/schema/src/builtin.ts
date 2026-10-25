@@ -26,12 +26,18 @@ function entry(definition: Body | Material | Constraint | Load): LibraryEntry {
  * Rein didaktisch, kein Stoff: 1000 kg/m^3 ist eine runde Dichte, mit der sich
  * Massen im Kopf nachrechnen lassen. Die Optik ist das Grau, das die Ebene
  * frueher fest hatte.
+ *
+ * Stosszahl 0: perfekt inelastisch. Weil eine Paarung das Minimum der beiden
+ * Stosszahlen nimmt, prallt alles, was mit Standard zusammenstoesst, nicht
+ * zurueck, sondern bleibt liegen oder geht ins Gleiten ueber - egal, aus
+ * welchem Material der Partner ist. Das war vor den Stosszahlen das einzige
+ * Verhalten und bleibt der Ausgangszustand eines neuen Szenarios.
  */
 export const STANDARD: Material = {
   kind: "material",
   id: "standard",
   name: "Standard",
-  mechanical: { density: 1000, restitution: 0.3, staticFriction: 0.5, kineticFriction: 0.4 },
+  mechanical: { density: 1000, restitution: 0, staticFriction: 0.5, kineticFriction: 0.4 },
   appearance: {
     macroscopic: { color: "#4a5568", metalness: 0.1, roughness: 0.8, opacity: 1 },
     atomic: { atomColor: "#7b8494", atomRadius: 140, lattice: "amorphous", latticeConstant: 400 },
@@ -45,8 +51,9 @@ export const IRON: Material = {
   formula: "Fe",
   mechanical: {
     density: 7874,
-    // Stosszahl von Eisen gegen Stahl. Gegen eine perfekt inelastische Flaeche
-    // (Stosszahl 0) wird sie ueberstimmt - die Paarung nimmt das Minimum.
+    // Stosszahl von Eisen gegen Stahl. Gegen einen Partner mit kleinerer
+    // Stosszahl (etwa Standard, 0) wird sie ueberstimmt - die Paarung nimmt das
+    // Minimum.
     restitution: 0.4,
     staticFriction: 0.74,
     kineticFriction: 0.57,
@@ -135,9 +142,6 @@ export const PLANE: Constraint = {
   name: "Ebene",
   behaviour: {
     constraintType: "staticSurface",
-    // Perfekt inelastisch: ein Koerper prallt nicht zurueck, sondern geht
-    // direkt ins Gleiten ueber. Die didaktisch gewollte Vereinfachung.
-    restitution: 0,
     segments: [
       {
         id: "flaeche",

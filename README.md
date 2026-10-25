@@ -223,7 +223,7 @@ Mit Absicht, in dieser Reihenfolge:
 
 | | Status |
 |---|---|
-| Reibung, Stoßzahl > 0, Luftwiderstand | Stufe 2. Materialdaten liegen bereit, kein Modul liest sie. |
+| Reibung, Luftwiderstand | Stufe 2. Materialdaten liegen bereit, kein Modul liest sie. |
 | Kugeln und andere Körperformen in der Oberfläche | Das Schema kennt `sphere`, die Oberfläche legt nur Blöcke an. |
 | Kontaktdrehmoment (Kippen, Kantenkontakt, Stapel) | Stufe 1b. Der Klotz berührt die schiefe Ebene mit einer Ecke statt mit der Fläche — sichtbarer Effekt, [erklärt](docs/architektur.md#was-stufe-1-bewusst-nicht-kann). |
 | Thermodynamik | Stufe 3. Pipeline-Phase `exchange` ist registriert und leer. |

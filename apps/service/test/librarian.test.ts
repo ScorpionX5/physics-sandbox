@@ -59,7 +59,6 @@ const PLANE_DRAFT: LibrarianDraft = {
   constraint: {
     name: "Stahlplatte",
     surface: { length: 4, width: 2, thickness: 0.06 },
-    restitution: 0,
   },
 };
 
@@ -211,7 +210,6 @@ describe("Zusammenbau einer Randbedingung", () => {
         constraint: {
           name: "Tisch",
           surface: { length: 3, width: 1.5, thickness: 0.04 },
-          restitution: 0.1,
         },
       },
       { prompt: "Tisch", model: "attrappe" },

@@ -15,6 +15,7 @@ export * from "./math/index.js";
 export * from "./rng.js";
 export * from "./state.js";
 export * from "./pipeline.js";
+export * from "./collision.js";
 export * from "./modules/mechanics.js";
 export * from "./simulate.js";
 export * from "./analysis.js";

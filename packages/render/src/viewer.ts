@@ -84,6 +84,20 @@ const CAMERA_DIRECTION = new THREE.Vector3(0.93, 0.25, 0.45);
 const CAMERA_DISTANCE_FACTOR = 1.15;
 
 /**
+ * Derselbe Faktor fuer die Startansicht eines neuen oder zurueckgesetzten
+ * Szenarios.
+ *
+ * Bewusst weiter weg als das Einpassen: wer ein Szenario oeffnet, will die
+ * Umgebung sehen und Platz zum Bauen haben; wer "Ansicht einpassen" drueckt,
+ * will das Szenario formatfuellend. Ein gemeinsamer Faktor zoeg die eine
+ * Ansicht zu nah oder die andere zu weit heraus.
+ */
+const INITIAL_CAMERA_DISTANCE_FACTOR = 5;
+
+/** `fit` = Ansicht einpassen, `initial` = Startansicht eines Szenarios. */
+export type FrameMode = "fit" | "initial";
+
+/**
  * Anhebung des Zielpunkts gegenueber der Mitte des Szenarios, Meter.
  *
  * Die Kamera blickt nicht auf die Mitte, sondern eine halbe Achsenlaenge
@@ -169,7 +183,7 @@ export class RecordingViewer {
     this.axes!.visible = options.showAxes ?? true;
     // Vor dem Einpassen: der Abstand haengt am Seitenverhaeltnis.
     this.resize();
-    this.frameScene();
+    this.frameScene("initial");
     this.controls = new OrbitLikeControls(this.camera, canvas, this.sceneFocus());
     this.renderOnce();
   }
@@ -301,13 +315,14 @@ export class RecordingViewer {
    * Seitenverhaeltnis. Eine umschliessende Kugel waere bequemer, zeigte aber
    * die flache Standardansicht deutlich zu klein.
    */
-  frameScene(): void {
+  frameScene(mode: FrameMode = "fit"): void {
     const focus = this.sceneFocus();
     const radius = Math.max(this.sceneBounds().getSize(new THREE.Vector3()).length() / 2, 0.5);
 
     const toCamera = CAMERA_DIRECTION.clone().normalize();
     const fitted = fitDistance(this.scenePoints(), focus, toCamera, this.camera.up, this.camera.fov, this.camera.aspect);
-    const distance = Math.max(fitted * CAMERA_DISTANCE_FACTOR, radius * 0.1);
+    const factor = mode === "initial" ? INITIAL_CAMERA_DISTANCE_FACTOR : CAMERA_DISTANCE_FACTOR;
+    const distance = Math.max(fitted * factor, radius * 0.1);
 
     this.frameDistance = distance;
     this.camera.position.copy(focus).addScaledVector(toCamera, distance);

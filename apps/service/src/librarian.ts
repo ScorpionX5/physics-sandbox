@@ -79,11 +79,6 @@ export type SurfaceDraft = z.infer<typeof SurfaceDraft>;
 export const ConstraintDraft = z.object({
   name: z.string().min(1).max(120).describe("Deutscher Anzeigename"),
   surface: SurfaceDraft,
-  restitution: z
-    .number()
-    .min(0)
-    .max(1)
-    .describe("Stosszahl der Flaeche: 0 = kein Zurueckprallen, 1 = idealelastisch"),
 });
 export type ConstraintDraft = z.infer<typeof ConstraintDraft>;
 
@@ -240,7 +235,6 @@ export function assembleEntry(draft: LibrarianDraft, options: AssembleOptions): 
     behaviour: {
       constraintType: "staticSurface",
       segments,
-      restitution: constraintDraft.restitution,
     },
   };
   return validateLibraryEntry({ definition, provenance });
@@ -287,7 +281,7 @@ Regeln:
 - Bei Stoffgemischen und Werkstoffen ohne klare Summenformel (Holz, Stahl, Beton) lass "formula" weg.
 - Farben waehle so, dass das Material wiedererkennbar ist: Metalle grau mit hohem metalness-Wert, Rost rotbraun, Gase blass und mit geringer opacity.
 - Fuer die atomare Ansicht gib Atomradius und Gitterkonstante in Pikometern an; ihr Verhaeltnis bestimmt die dargestellte Packungsdichte und soll stimmen.
-- Bei Randbedingungen (constraint) gib nur Laenge, Breite, Dicke und Stosszahl an; das Aussehen kommt vom Material, das der Benutzer der Flaeche zuweist. Eine Randbedingung ist immer eine einzelne, waagerechte Flaeche; Neigung, Lage und Groesse legt der Benutzer beim Platzieren fest. Erzeuge also keine fertigen Rampen.
+- Bei Randbedingungen (constraint) gib nur Laenge, Breite und Dicke an; Aussehen und Stosszahl kommen vom Material, das der Benutzer der Flaeche zuweist. Eine Randbedingung ist immer eine einzelne, waagerechte Flaeche; Neigung, Lage und Groesse legt der Benutzer beim Platzieren fest. Erzeuge also keine fertigen Rampen.
 - Waehle "constraint" nur fuer Dinge ohne eigene Materie im Sinne der Simulation: Flaechen, Rampen. Alles Stoffliche ist "material".`;
 
 export interface ClaudeLibrarianOptions {
