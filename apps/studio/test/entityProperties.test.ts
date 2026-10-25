@@ -74,7 +74,7 @@ describe("Gliederung", () => {
     assert.deepEqual(layout(durchstich, "klotz"), [
       ["position", "rotation", "edges"],
       ["material"],
-      ["velocity"],
+      ["velocity", "initialAngularVelocity"],
       ["opacity"],
     ]);
   });
@@ -123,6 +123,18 @@ describe("Lesen und Schreiben", () => {
     if (size.type !== "vector3") return assert.fail("Größe muss ein 3D-Vektor sein");
     const spec = specOf(durchstich, "auslauf");
     assert.ok(size.get(durchstich, spec)[2] > 0);
+  });
+
+  it("zeigt die Startwinkelgeschwindigkeit in °/s und speichert rad/s", () => {
+    const omega = property("initialAngularVelocity");
+    if (omega.type !== "vector3") return assert.fail("Startwinkelgeschw. muss ein 3D-Vektor sein");
+    const next = omega.set(durchstich, "klotz", [180, 0, -90]);
+    const spec = specOf(next, "klotz");
+    assert.ok(spec.kind === "body");
+    assert.ok(Math.abs(spec.velocity.angular[0] - Math.PI) < 1e-12);
+    assert.ok(Math.abs(spec.velocity.angular[2] + Math.PI / 2) < 1e-12);
+    assert.ok(Math.abs(omega.get(next, spec)[0] - 180) < 1e-9);
+    runScenario(next);
   });
 
   it("bietet das Material als Auswahl an und wechselt es", () => {

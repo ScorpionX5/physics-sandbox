@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 import * as THREE from "three";
 
-import { createInclinedPlaneScenario, RAMP_ORIENTATION, type Recording } from "@sandbox/schema";
+import { createInclinedPlaneScenario, RAMP_ORIENTATION, SMOOTH, type Recording } from "@sandbox/schema";
 import { runScenario } from "@sandbox/core";
 
 import { AtomicRenderer } from "../src/layers/atomic.js";
@@ -221,7 +221,8 @@ describe("Makroskopische Ansicht", () => {
     const group = layer.root.getObjectByName("randbedingung:schiefe-ebene")!;
     const mesh = group.children[0] as THREE.Mesh;
     const material = mesh.material as THREE.MeshStandardMaterial;
-    assert.equal(`#${material.color.getHexString()}`, "#4a5568", "Farbe von Standard nicht uebernommen");
+    // Die Rampe im Durchstich ist aus Glatt.
+    assert.equal(`#${material.color.getHexString()}`, SMOOTH.appearance.macroscopic.color, "Farbe von Glatt nicht uebernommen");
     layer.dispose();
   });
 

@@ -233,7 +233,7 @@ anzulegen.
   umstellen lässt. Die Startbibliothek führt deshalb „Standard" (1000 kg/m³, grau) als erstes Material.
 - **Auch die Ebene hat ihr Material statt einer eigenen Farbe.** Der Randbedingungs-Eintrag
   hat wie der Körper-Eintrag kein `appearance`; die Optik der Fläche kommt aus
-  `ConstraintSpec.materialId` (später auch die Reibung).
+  `ConstraintSpec.materialId`, und mit ihr Stoßzahl und Reibung.
 - **Materialien werden nicht platziert.** In der Bibliothek stehen sie ohne
   Knopf; zugewiesen werden sie in der rechten Leiste.
 
@@ -244,18 +244,104 @@ lehnt das Schema ab — dieselbe Haltung wie bei jeder älteren Datei.
 
 ## Kontakte
 
-Für den Block werden die acht Ecken gegen die endlichen Flächensegmente
-geprüft, für die Kugel der Mittelpunkt abzüglich Radius. Je Segment zählt nur
-der tiefste Punkt — zwei Ecken auf derselben Platte dürfen die Lagekorrektur
-nicht verdoppeln.
+Ein **Kontakt** besteht aus Normale, Tiefe und **Kontaktpunkten**. Die
+Geometrie dazu liegt in [collision.ts](../packages/core/src/collision.ts), der
+Löser in `contacts` in [mechanics.ts](../packages/core/src/modules/mechanics.ts).
 
-Aufgelöst wird reibungsfrei: nur die Normalkomponente der Geschwindigkeit wird
-verändert, die Tangentialkomponente bleibt unberührt. Das ist der Grund, warum
-der Klotz die schiefe Ebene hinabbeschleunigt und auf dem Auslauf mit konstanter
-Geschwindigkeit weitergleitet — und warum es den Eingriff bei t = 2 s braucht,
-um ihn anzuhalten.
+### Kontaktpunkte: die Ecken der Kontaktfläche
 
-### Stoßzahl und Körper-Körper-Kontakt
+Ein Flächensegment wird für den Test als **flache Platte mit seiner Dicke**
+behandelt, also als Quader. Körper gegen Ebene ist damit dieselbe Rechnung wie
+Quader gegen Quader: der Satz der Trennachsen (15 Achsen; Flächenachsen haben
+Vorrang vor Kantenachsen, sonst springt die Normale bei fast paralleler Lage)
+liefert Normale und Tiefe, danach entstehen die Punkte:
+
+- **Flächenachse:** die einfallende Fläche des anderen Quaders — die der
+  Bezugsfläche am stärksten zugewandte — wird an den vier Seiten der
+  Bezugsfläche beschnitten (Sutherland–Hodgman). Jede Ecke hinter der
+  Bezugsebene ist ein Kontaktpunkt. Liegt ein Quader flach auf, sind das die
+  vier Ecken der *gemeinsamen* Fläche; ragt er über einen Rand, die Ecken des
+  aufliegenden Teils; steht er auf einer Kante, deren zwei Endpunkte.
+- **Kantenachse:** zwei Kanten kreuzen sich, der Kontaktpunkt ist die Mitte
+  ihrer nächsten Punkte.
+- **Kugel:** ein Punkt, ihr tiefster.
+
+Dass die Platte Dicke hat, ist nicht Kosmetik: kippt ein Quader über den
+Plattenrand, drückt die **Plattenkante** gegen seine Unterseite, und die Kraft
+steht senkrecht auf *dieser*, nicht auf der Platte. Mit der Plattennormale gäbe
+es reibungsfrei keine waagerechte Kraft; der Schwerpunkt käme nie über den
+Rand hinaus, und der Quader schaukelte für immer auf der Kante. Eine Ausnahme:
+die **Unterseite schiebt nie** (`upward` in `considerAxis`). Ein Körper, der
+tiefer als die halbe Plattendicke eingesunken ist, wird trotzdem nach oben
+herausgeschoben — eine Fläche hat eine Oberseite. Tiefer als die doppelte
+Körpergröße zählt nicht mehr als Kontakt, sondern als durchgetunnelt
+(`PENETRATION_LIMIT_FACTOR`).
+
+### Wo die Kraft angreift: nicht im Flächenmittelpunkt
+
+Naheliegend wäre, die Kontaktfläche auf ihren Mittelpunkt zu verdichten. Das
+ist falsch: die resultierende Kraft greift im **Druckmittelpunkt** an, und der
+liegt zwar immer in der Kontaktfläche, aber nur im Sonderfall in ihrer Mitte.
+Ein Quader, dessen Schwerpunkt über den Plattenrand ragt, berührt die Platte
+mit derselben Fläche wie einer, der sicher liegt — der eine wird über die ganze
+Fläche getragen, der andere nur noch an der Kante, und genau deshalb kippt er.
+Wo die Kraft angreift, ist eine Frage der Dynamik, nicht der Geometrie.
+
+Der Löser verteilt den Impuls deshalb selbst auf die Kontaktpunkte. Gesucht sind
+Impulse `λᵢ ≥ 0` so, dass nach dem Stoß an jedem Punkt die Normalgeschwindigkeit
+mindestens ihr Ziel erreicht, und ein Punkt nur dann trägt, wenn er genau darauf
+steht — ein Kontakt zieht nicht:
+
+```
+w = K·λ + b ≥ 0,   λ ≥ 0,   λᵢ·wᵢ = 0
+Kᵢⱼ = 1/m_a + 1/m_b + (r_aᵢ × n)·I_a⁻¹(r_aⱼ × n) + (r_bᵢ × n)·I_b⁻¹(r_bⱼ × n)
+```
+
+`K` sagt, wie stark ein Einheitsimpuls am Punkt j die Normalgeschwindigkeit am
+Punkt i ändert — durch Verschieben und durch Drehen. Gelöst wird das kleine
+Komplementaritätsproblem **exakt**, durch Ausprobieren der tragenden
+Teilmengen, kleinste zuerst (`solveContact`). Mehr als drei Punkte braucht es
+nie: entlang einer Normale hat ein starrer Körper drei Freiheitsgrade
+(Verschieben, zwei Kippungen), und jeder Druckmittelpunkt liegt in einem Dreieck
+aus drei Ecken der Kontaktfläche. Die Aufteilung auf vier Ecken einer
+aufliegenden Fläche ist deshalb nicht eindeutig — die Bewegung, die
+herauskommt, schon. Die Reihenfolge der Teilmengen ist fest, der Lauf bleibt
+deterministisch.
+
+Exakt statt iterativ, weil die Tests es verlangen: der Gleittest erwartet
+`g·sin 30°` auf 10⁻¹³, die Stoßtests die Stoßgesetze auf 10⁻⁹. Ein übliches
+Gauß-Seidel-Verfahren über die Einzelpunkte erreicht das nicht in vertretbar
+vielen Durchläufen, und sein Rest hinterlässt eine kleine Drehung, die von
+Schritt zu Schritt mitgeschleppt wird. Aus demselben Grund ist die Toleranz
+relativ (`SOLVER_TOLERANCE`, 10⁻¹² der aufzuhebenden Geschwindigkeit): eine
+feste Schranke von 10⁻¹⁰ m/s ließ einen Stapel nach drei Sekunden um 10⁻⁹ m
+seitlich wandern. Iteriert wird nur *zwischen* Kontakten — Stapel, ein Klotz an
+der Knickkante —, höchstens `SOLVER_ITERATIONS`-mal, bis sich nichts mehr
+ändert.
+
+Zum Normalimpuls kommt je Kontakt die Reibung (siehe [Reibung](#reibung)).
+Im Durchstich sind Rampe und Auslauf aus **Glatt**, dem reibungsfreien Material:
+dann wirken alle Impulse entlang der Kontaktnormale, und die
+Tangentialkomponente der Schwerpunktsgeschwindigkeit bleibt unberührt — auch
+während der Klotz kippt. Das ist der Grund, warum er die schiefe Ebene mit genau
+`g·sin α` hinabbeschleunigt und auf dem Auslauf mit konstanter Geschwindigkeit
+weitergleitet, und warum es den Eingriff bei t = 2 s braucht, um ihn anzuhalten.
+
+Was man im Durchstich sieht: der Klotz fällt achsenparallel auf die 30°-Rampe,
+trifft mit einer Ecke auf und bekommt dabei rund 18 rad/s. Er hebt kurz ab,
+landet über die Flächenlage hinaus auf der anderen Kante, schaukelt zurück und
+liegt ab etwa 0,65 s flach auf — der Mittelpunkt eine halbe Kante über der
+Rampe, nicht mehr wie früher 0,137 m auf der Ecke. An der Knickkante kippt er
+ein zweites Mal, auf den Auslauf.
+
+**Lagekorrektur.** Nach dem Lösen wird die Eindringtiefe herausgeschoben, ohne
+Schlupfzone, damit ein Körper exakt aufliegt. Sie verschiebt nur und dreht
+nicht; die Drehung besorgt der Impuls im nächsten Schritt. Reihenfolge: erst
+alle Körperpaare, dann die Ebenen. Die Korrektur eines Paars kann einen Körper
+in eine Ebene drücken; die Ebene hat das letzte Wort, damit nichts aus ihr
+herausragt.
+
+### Stoßzahl
 
 **Die Stoßzahl gehört zur Paarung, gespeichert wird sie am Material.** Physikalisch
 hat nicht „Eisen" eine Stoßzahl, sondern Eisen gegen Stahl. Das Modell nimmt
@@ -266,55 +352,113 @@ das Standardverhalten braucht: Standard hat Stoßzahl 0, also bleibt alles, was
 mit Standard zusammenstößt, liegen, egal aus welchem Material es ist. Ein neues
 Szenario verhält sich damit wie vor den Stoßzahlen.
 
-Der Impuls eines Körperpaars folgt dem zentralen Stoß:
+Die Stoßzahl wirkt je Kontaktpunkt: das Ziel eines Punkts ist `−e·v⁻`, das
+`e`-fache seiner Aufprallgeschwindigkeit vor dem Lösen. Beim zentralen Stoß
+zweier Körper (alle Punkte gleich schnell, die Kraft durch beide Schwerpunkte)
+ergibt das genau
 
 ```
 j = −(1 + e) · v_rel / (1/m_a + 1/m_b),   v_rel = (v_b − v_a) · n
 ```
 
-Er verteilt sich nach den Massen, der Impuls bleibt erhalten, bei e = 1 auch die
-Energie; ein festgehaltener Körper (`1/m = 0`) wirkt wie eine Wand. Die
-Eindringtiefe wird im selben Verhältnis aufgeteilt. Die Geometrie
-([collision.ts](../packages/core/src/collision.ts)) liefert nur Normale und Tiefe:
-Quader gegen Quader nach dem Satz der Trennachsen (15 Achsen; Flächenachsen haben
-Vorrang vor Kantenachsen, sonst springt die Normale bei fast paralleler Lage),
-dazu Kugel gegen Kugel und Kugel gegen Quader.
+Der Impuls bleibt erhalten, bei e = 1 auch die Energie — auch beim Stoß auf eine
+Ecke, bei dem ein Teil davon in Drehung übergeht; ein festgehaltener Körper
+(`1/m = 0`) wirkt wie eine Wand.
 
 **Ruheschwelle.** Ein aufliegender Körper fällt in jedem Schritt um `g·dt` in
 seine Unterlage. Mit e > 0 gäbe jeder Kontakt davon den Anteil e zurück: der
 Körper hüpfte in Mikrometern, und `contactCount` wechselte tausendmal pro
 Sekunde zwischen 0 und 1. Unterhalb von `10 · |g| · dt` (bei Erdschwere und 1 ms
-knapp 0,1 m/s) gilt deshalb e = 0. Die zehn statt eines Schritts kommen vom
-Stapel: jede Lage löst ihren Kontakt nach der darüberliegenden, und der Rest,
-den die obere dabei behält, wächst mit der Höhe. Ohne Schwerkraft ist die
-Schwelle 0 und jeder Stoß prallt ab.
+knapp 0,1 m/s) gilt deshalb e = 0. Zehn statt eines Schritts, weil ein Körper,
+der sich nach dem Kippen auf eine Fläche legt, mit der zuletzt aufschlagenden
+Kante etwas schneller ankommt als `g·dt`. Ohne Schwerkraft ist die Schwelle 0
+und jeder Stoß prallt ab.
 
-**Reihenfolge.** Erst alle Körperpaare, dann die Ebenen. Die Lagekorrektur eines
-Paars kann einen Körper in eine Ebene drücken; die Ebene hat das letzte Wort,
-damit nichts aus ihr herausragt.
+### Reibung
 
-### Was Stufe 1 bewusst nicht kann
+**Gemessen wird Reibung an einer Paarung, gespeichert wird sie am Material.**
+Tabellen nennen „Stahl auf Stahl" oder „Holz auf Stahl"; einen Reibwert von
+„Stahl" allein gibt es physikalisch nicht, und für die Kombination zweier
+Werkstoffe gibt es keine Formel, die aus der Physik folgt. Reibung hängt an der
+Oberfläche, an Schmierung, Feuchte und Temperatur. Jede Simulation, die
+Materialien frei kombinieren lässt, braucht trotzdem eine Regel: Box2D und
+Bullet nehmen das **geometrische Mittel** `√(μ_a·μ_b)`, PhysX und Unity
+standardmäßig das arithmetische Mittel, wahlweise Minimum, Maximum oder Produkt.
 
-Der Impuls wird am **Schwerpunkt** angesetzt und erzeugt damit kein
-Kontaktdrehmoment. Der Klotz kippt nicht: auf der schiefen Ebene berührt er die
-Fläche mit einer Ecke statt mit der Fläche, und sein Mittelpunkt bleibt
-0,137 m über der Ebene statt 0,1 m. Bei einem 20-cm-Klotz auf einer 4-m-Rampe
-ist das ein kleiner sichtbarer Effekt, aber es ist einer.
+Hier gilt das geometrische Mittel (`pairFriction` in mechanics.ts), für alle drei
+Werte. Es liefert das Erwartete: zwei gleiche Materialien reiben mit ihrem
+eigenen Wert — der Wert am Material ist deshalb der **gegen sich selbst**, so
+fragt ihn auch der Bibliothekar ab —, und ein reibungsfreies Material (Glatt, 0)
+macht jede Paarung reibungsfrei. Das Minimum, das die Stoßzahl nimmt, ließe ein
+rutschiges Material jede Paarung allein bestimmen; das arithmetische Mittel ließe
+Eisen auf Glatt noch mit halber Eisenreibung haften. Weil das Mittel monoton ist,
+bleibt die Gleitreibung der Paarung unter der Haftreibung, wenn das für beide
+Materialien gilt (die Prüfung lehnt μ_G > μ_H ab). Eine Paarungstabelle, die für
+bekannte Paarungen den gemessenen Wert vor die Regel setzt, wäre eine Ergänzung
+in genau dieser Funktion, kein Umbau.
 
-Das ist die sichtbare Seite der Stufe-1b-Lücke und bewusst so: Kipp-Dynamik
-braucht einen iterativen Kontaktlöser, und Rotationsintegration und
-Kontaktauflösung gleichzeitig zu entwickeln verzögert beides.
+Fehlt ein Reibwert am Material, ist es reibungsfrei — so verhielt sich jedes
+Material vor der Reibung, und ältere Dateien laufen unverändert.
 
-Dasselbe gilt für Körper gegen Körper, mit drei sichtbaren Folgen:
+**Was gerechnet wird**, je Kontakt nach dem Normalimpuls (`solveFriction`):
 
-- Ein Quader, der mit der Kante auf einen anderen fällt, kippt nicht, er
-  bekommt nur den Impuls entlang der Normale. Es gibt auch keinen Kontaktpunkt,
-  nur Normale und Tiefe.
-- Stöße sind reibungsfrei, ein Körper rutscht auf dem anderen ohne Bremse.
-- Ein Stapel wird in einem Durchlauf aufgelöst, ohne Iteration. Die oberen Lagen
-  behalten dadurch eine Restgeschwindigkeit von einigen `g·dt` (bei drei
-  Quadern etwa 0,04 m/s); ihre Lage bleibt exakt, der Geschwindigkeitspfeil der
-  Kinematik-Ebene nicht ganz null.
+| | Grenze | Wirkung |
+|---|---|---|
+| **Haftreibung** | `μ_H · N` | hebt die Relativbewegung am Druckmittelpunkt ganz auf, wenn der dafür nötige Stoß unter der Grenze bleibt |
+| **Gleitreibung** | `μ_G · N` | sonst: derselbe Stoß, auf `μ_G · N` gekürzt |
+| **Bohrreibung** | `μ · N · r_K` | dasselbe für die Drehung um die Normale, `r_K` aus der Kontaktfläche |
+| **Rollreibung** | `f · N` | ein Moment gegen das Abrollen; `f` ist eine Länge (Hebelarm der Rollreibung) |
+
+`N` ist die Summe der Normalimpulse des Kontakts; alles ist als Impuls je
+Zeitschritt gerechnet, nicht als Kraft. Der Reibstoß greift am
+**Druckmittelpunkt** an, dem mit den Normalimpulsen gewichteten Mittel der
+Kontaktpunkte. Dass die Aufteilung auf die Ecken nicht eindeutig ist (drei
+genügen), stört nicht: Summe und Moment der Normalimpulse sind eindeutig, und
+nur die bestimmen den Druckmittelpunkt. Der Angriffspunkt zählt, weil die
+Reibung unter dem Schwerpunkt angreift und einen gebremsten Klotz nach vorn
+kippt; die Normalimpulse wandern daraufhin nach vorn. Deshalb wechseln sich
+Normal- und Reibstoß je Kontakt ab, bis beide zueinander passen.
+
+Haften oder Gleiten entscheidet sich in jedem Schritt neu am Stoß, der die
+Bewegung ganz aufheben würde — nicht an einer Geschwindigkeitsschwelle. Ein
+liegender Klotz auf 25° bleibt bei μ_G = 0,4 < tan 25° < μ_H = 0,5 liegen; ein
+angestoßener gleitet weiter. Die Rollreibung ist eine Länge, weil sie aus der
+Verformung an der Auflage kommt: das Moment ist `f·N`, der Rollwiderstand eines
+Rads `f/r`. Sie wirkt auf jeden Kontakt, also auch auf einen Quader, der über
+eine Kante kippt — dort ist sie um Größenordnungen kleiner als das Kippmoment.
+
+**Lagenachtrag.** Der Reibstoß gehört in die Lage wie eine Kraft über den
+Schritt: Velocity-Verlet bewegt um `v·dt + ½·a·dt²`, und `integrate` kennt die
+Reibung noch nicht. Ohne Nachtrag (`½·dt·Δv` aus dem Reibstoß) kröche ein
+haftender Klotz auf 30° um `½·g·sin α·dt²` je Schritt hangab, 2,5 mm/s, obwohl
+seine Geschwindigkeit jeden Schritt wieder 0 ist. Mit dem Nachtrag bleibt die
+Gleitbewegung so exakt wie der freie Fall: `a = g(sin α − μ_G cos α)` auf 10⁻¹⁴.
+Die Normalrichtung braucht keinen, dort korrigiert die Eindringtiefe.
+
+### Was Stufe 1 und 2 bewusst nicht können
+
+- **Reibung und Stoßzahl zusammen können Energie erzeugen.** Mit Newtons
+  Stoßzahl (Ziel `−e·v⁻` je Punkt) und Coulomb-Reibung kann ein elastischer
+  Stoß außerhalb des Schwerpunkts mehr Energie hinterlassen, als vorher da war —
+  Kanes Paradoxon. Bei einem Würfel, der mit e = 1 schräg auf eine Ecke fällt,
+  sind es knapp 2 %. In Stichproben mit den mitgelieferten Materialien
+  (e ≤ 0,4; 54 Eckstöße verschiedener Lage und Geschwindigkeit) trat es nicht auf. Abhilfe wäre die Stoßzahl nach Poisson (auf den
+  Impuls bezogen statt auf die Geschwindigkeit).
+- **Bohrreibung ist genähert.** Der wirksame Radius der Kontaktfläche ist zwei
+  Drittel des mittleren Eckabstands vom Mittelpunkt, nicht das druckgewichtete
+  Mittel über die Fläche (für ein Quadrat ein Viertel zu hoch). Schieben und
+  Bohren werden getrennt begrenzt, nicht gemeinsam. Eine Kugel (ein Punkt) hat
+  keine Bohrreibung.
+- **Haften konvergiert langsam.** Normal- und Reibstoß stimmen sich über das
+  Kippmoment ab; bei einem haftenden Quader schrumpft der Rest je Durchlauf um
+  etwa 40 %, nach `SOLVER_ITERATIONS` bleiben einige 10⁻¹⁰ m/s — das
+  sind Nanometer je Sekunde.
+- Die Lagekorrektur **dreht nicht**. Bei den kleinen Eindringtiefen von
+  1-ms-Schritten fällt das nicht auf; bei großen Zeitschritten kann ein schräg
+  einsinkender Körper dadurch etwas angehoben werden, statt aufgerichtet.
+- Kontakte werden in jedem Schritt **neu erkannt**, ohne Gedächtnis über
+  Schritte hinweg. Für wenige Körper genügt das; für hohe Stapel wäre das
+  Weiterreichen der Impulse des letzten Schritts die nächste Verbesserung.
 
 ### Eigener Löser statt Physik-Engine
 
@@ -328,7 +472,8 @@ Löser:
    Binärversion deterministisch, aber nicht garantiert zwischen Linux-Server und
    Windows-Browser.
 3. **Der Fall ist klein.** Wenige Körper gegen fixierte Flächen und gegeneinander,
-   keine Reibung, Impuls am Schwerpunkt: ein paar hundert Zeilen.
+   ein exakter Normallöser je Kontakt, Reibung als Coulomb-Grenze daneben: ein
+   paar hundert Zeilen.
 
 **Umkehrpunkt:** Sobald viele Körper mit Stapeln, Gelenken und bleibenden
 Kontakten dazukommen, ist ein eigener Löser Arbeit, die Rapier schon geleistet
@@ -616,9 +761,8 @@ Wege liefern dasselbe Ergebnis, weil der Kern deterministisch ist.
 
 | Stufe | Inhalt | Neue Kopplung |
 |---|---|---|
-| **1** | Mechanik: Translation, Rotation, Kontakt ohne Reibung, Stoßzahl (Körper–Körper und Körper–Ebene) | — |
-| **1b** | Kontaktdrehmoment: Kippen, Kantenkontakt, Stapel | Rotation ↔ Kontakt |
-| **2** | Reibung, Luftwiderstand | Materialdaten ↔ Mechanik |
+| **1** | Mechanik: Translation, Rotation, Kontakt ohne Reibung, Stoßzahl (Körper–Körper und Körper–Ebene), Kontaktdrehmoment (Kippen, Kantenkontakt, Stapel) | Rotation ↔ Kontakt |
+| **2** | Reibung (Haft-, Gleit-, Bohr-, Rollreibung — erledigt), Luftwiderstand | Materialdaten ↔ Mechanik |
 | **3** | Thermodynamik: Leitung, Strahlung, Konvektion, Phasenübergänge | **Reibungswärme** — Stufe 2 speist Stufe 3 |
 | **4** | Chemie: Reaktionen, Arrhenius-Kinetik, Stoffumsatz | **Temperatur treibt Reaktionsrate** — Stufe 3 speist Stufe 4 |
 

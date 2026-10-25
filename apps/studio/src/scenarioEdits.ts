@@ -564,6 +564,18 @@ export function setBodyInitialVelocity(
   });
 }
 
+/** Wie `setBodyInitialVelocity`; `angular` in rad/s, Achse * Betrag, wie gespeichert. */
+export function setBodyInitialAngularVelocity(
+  scenario: Scenario,
+  entityId: string,
+  angular: Vec3,
+): Scenario {
+  return withEntitySpec(scenario, entityId, (spec) => {
+    if (spec.kind !== "body") throw new Error(`"${entityId}" ist kein Koerper.`);
+    spec.velocity.angular = angular;
+  });
+}
+
 /**
  * Loescht ein Objekt vollstaendig - seine Definition und alle Eingriffe auf es.
  *

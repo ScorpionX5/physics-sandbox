@@ -18,7 +18,9 @@ import {
   entityTrack,
   makeMechanicalState,
   overlapBodies,
+  overlapSurface,
   runScenario,
+  type ResolvedSegment,
   type RuntimeBody,
 } from "../src/index.js";
 
@@ -39,9 +41,22 @@ const HALF_ELASTIC: Material = {
   mechanical: { ...STANDARD.mechanical, restitution: 0.5 },
 };
 
+/**
+ * Elastisch und reibungsfrei: fuer die Energiebilanz eines Stosses. Mit Reibung
+ * gilt sie nicht mehr - Newtons Stosszahl zusammen mit Coulomb-Reibung kann bei
+ * einem Stoss ausserhalb des Schwerpunkts sogar Energie erzeugen (Kanes
+ * Paradoxon), siehe Architektur.
+ */
+const SMOOTH_ELASTIC: Material = {
+  ...STANDARD,
+  id: "glatt-elastisch",
+  name: "Glatt und elastisch",
+  mechanical: { ...STANDARD.mechanical, restitution: 1, staticFriction: 0, kineticFriction: 0, rollingFriction: 0 },
+};
+
 const LIBRARY: LibraryEntry[] = [
   ...BUILTIN_LIBRARY,
-  ...[ELASTIC, HALF_ELASTIC].map((definition) => ({
+  ...[ELASTIC, HALF_ELASTIC, SMOOTH_ELASTIC].map((definition) => ({
     definition,
     provenance: { source: "manual" as const, correctedFields: [], warnings: [] },
   })),
@@ -53,7 +68,13 @@ function body(
   id: string,
   materialId: string,
   position: Vec3,
-  options: { velocity?: Vec3; half?: number; shape?: Shape; kinematic?: boolean } = {},
+  options: {
+    velocity?: Vec3;
+    half?: number;
+    shape?: Shape;
+    kinematic?: boolean;
+    orientation?: [number, number, number, number];
+  } = {},
 ): EntitySpec {
   const half = options.half ?? 0.1;
   return {
@@ -63,23 +84,42 @@ function body(
     materialId,
     opacity: 1,
     phase: { state: "solid", shape: options.shape ?? { type: "box", halfExtents: [half, half, half] } },
-    pose: { position, orientation: IDENTITY },
+    pose: { position, orientation: options.orientation ?? IDENTITY },
     velocity: { linear: options.velocity ?? [0, 0, 0], angular: [0, 0, 0] },
     kinematic: options.kinematic ?? false,
   };
 }
 
-/** Eine grosse waagerechte Ebene mit Oberseite bei z = 0. */
-function plane(materialId: string): EntitySpec {
+/**
+ * Eine waagerechte Ebene mit Oberseite bei z = 0. Ohne Angaben gross und um den
+ * Ursprung; mit `center`/`half` eine Platte mit Rand, ueber den etwas kippen kann.
+ */
+function plane(materialId: string, center: Vec3 = [0, 0, 0], half: [number, number] = [5, 5]): EntitySpec {
   return {
     kind: "constraint",
     id: "boden",
     constraintId: "ebene",
     materialId,
     opacity: 1,
-    pose: { position: [0, 0, 0], orientation: IDENTITY },
-    size: [5, 5],
+    pose: { position: center, orientation: IDENTITY },
+    size: half,
   };
+}
+
+/** Drehung um eine Einheitsachse, als Quaternion [x, y, z, w]. Nur im Test: der Kern rechnet ohne Winkelfunktionen. */
+function axisAngle(axis: Vec3, degrees: number): [number, number, number, number] {
+  const half = (degrees * Math.PI) / 360;
+  const s = Math.sin(half);
+  return [axis[0] * s, axis[1] * s, axis[2] * s, Math.cos(half)];
+}
+
+function quatMultiply(a: readonly number[], b: readonly number[]): [number, number, number, number] {
+  return [
+    a[3]! * b[0]! + a[0]! * b[3]! + a[1]! * b[2]! - a[2]! * b[1]!,
+    a[3]! * b[1]! - a[0]! * b[2]! + a[1]! * b[3]! + a[2]! * b[0]!,
+    a[3]! * b[2]! + a[0]! * b[1]! - a[1]! * b[0]! + a[2]! * b[3]!,
+    a[3]! * b[3]! - a[0]! * b[0]! - a[1]! * b[1]! - a[2]! * b[2]!,
+  ];
 }
 
 function scene(
@@ -407,6 +447,106 @@ describe("Stapel", () => {
   });
 });
 
+// ---------------------------------------------------------------- Kontaktdrehmoment
+
+describe("Kontaktdrehmoment: die Kraft greift am Kontaktpunkt an", () => {
+  // Platte von x = -2 bis x = 0: ihr Rand liegt bei x = 0.
+  const ledge = (): EntitySpec => plane("standard", [-1, 0, 0], [1, 1]);
+  const HALF = 0.1;
+
+  it("kippt nicht, solange der Schwerpunkt ueber der Auflageflaeche liegt", () => {
+    // 70 % der Unterseite liegen auf; der Schwerpunkt steht 3 cm vor dem Rand.
+    const recording = runScenario(
+      scene([ledge(), body("klotz", "standard", [-0.03, 0, HALF])], { gravity: EARTH_GRAVITY, duration: 1 }),
+    );
+    const end = lastOf(recording, "klotz").mechanics;
+    const tilt = Math.hypot(end.orientation[0], end.orientation[1], end.orientation[2]);
+    assert.ok(tilt < 1e-9, `Klotz hat sich gedreht: ${[...end.orientation]}`);
+    assert.ok(Math.abs(end.position[2] - HALF) < 1e-5, `z war ${end.position[2]}`);
+  });
+
+  it("kippt ueber die Kante, sobald der Schwerpunkt darueber hinausragt", () => {
+    const recording = runScenario(
+      scene([ledge(), body("klotz", "standard", [0.03, 0, HALF])], { gravity: EARTH_GRAVITY, duration: 1 }),
+    );
+    const track = entityTrack(recording, "klotz");
+    // Drehung um y, die +x-Seite nach unten. Gemessen wird der groesste Winkel
+    // unterwegs, nicht der am Ende: im freien Fall dreht der Klotz weiter, und
+    // 2*asin|q_y| laeuft nach einer halben Umdrehung wieder auf 0 zu.
+    const tilt = Math.max(...track.map((s) => 2 * Math.asin(Math.min(1, Math.abs(s.mechanics.orientation[1])))));
+    assert.ok(tilt > Math.PI / 4, `nur um ${((tilt * 180) / Math.PI).toFixed(1)} Grad gekippt`);
+    const end = track.at(-1)!.mechanics;
+    assert.ok(end.position[2] < 0, `Klotz liegt noch auf der Platte (z = ${end.position[2]})`);
+  });
+
+  it("beginnt reibungsfrei mit alpha = m g d / (I + m d^2) zu kippen", () => {
+    // Reibungsfrei (Glatt) gibt es keine waagerechte Kraft: der Schwerpunkt faellt
+    // senkrecht, die Kante gleitet. Mit der Normalkraft N an der Kante im
+    // waagerechten Abstand d vom Schwerpunkt und der Bedingung, dass die Kante
+    // nicht einsinkt (a_z = -alpha d):
+    //   I alpha = N d,  N = m (g - alpha d)  =>  alpha = m g d / (I + m d^2).
+    // Fuer den Wuerfel ist I = m (2 h^2) / 3. Die Kante ist der Rand der Platte -
+    // nicht der Flaechenmittelpunkt der Auflage, sonst kaeme ein anderes d heraus.
+    const d = 0.03;
+    const inertiaPerMass = (2 * HALF * HALF) / 3;
+    const alpha = (EARTH_GRAVITY * d) / (inertiaPerMass + d * d);
+    const recording = runScenario(
+      scene([plane("glatt", [-1, 0, 0], [1, 1]), body("klotz", "glatt", [d, 0, HALF])], {
+        gravity: EARTH_GRAVITY,
+        duration: 0.05,
+      }),
+    );
+    const sample = entityTrack(recording, "klotz").find((s) => Math.abs(s.t - 0.02) < 1e-9)!;
+    const measured = sample.mechanics.angularVelocity[1] / sample.t;
+    assert.ok(
+      Math.abs(measured - alpha) / alpha < 1e-2,
+      `Winkelbeschleunigung ${measured.toFixed(3)} rad/s^2, erwartet ${alpha.toFixed(3)}`,
+    );
+  });
+
+  it("dreht mit Haftreibung um die feste Kante: alpha = g (d - f) / (I/m + d^2 + h^2)", () => {
+    // Haftet die Kante (Standard auf Standard, mu_H = 0,5), ist sie die
+    // Drehachse: Steiner liefert I_Kante = I + m (d^2 + h^2), und das
+    // Rollreibungsmoment f N mit N ~ m g wirkt dem Kippmoment m g d entgegen.
+    // Die noetige Haftkraft m alpha h liegt bei einem Sechstel von N - die Kante
+    // rutscht also nicht.
+    const d = 0.03;
+    const f = STANDARD.mechanical.rollingFriction!;
+    const inertiaPerMass = (2 * HALF * HALF) / 3;
+    const alpha = (EARTH_GRAVITY * (d - f)) / (inertiaPerMass + d * d + HALF * HALF);
+    const recording = runScenario(
+      scene([ledge(), body("klotz", "standard", [d, 0, HALF])], { gravity: EARTH_GRAVITY, duration: 0.05 }),
+    );
+    const sample = entityTrack(recording, "klotz").find((s) => Math.abs(s.t - 0.02) < 1e-9)!;
+    const measured = sample.mechanics.angularVelocity[1] / sample.t;
+    assert.ok(
+      Math.abs(measured - alpha) / alpha < 1e-2,
+      `Winkelbeschleunigung ${measured.toFixed(3)} rad/s^2, erwartet ${alpha.toFixed(3)}`,
+    );
+  });
+
+  it("erhaelt beim reibungsfreien Stoss auf eine Ecke mit e = 1 die Energie und setzt sie teils in Drehung um", () => {
+    // Ohne Schwerkraft, schraeg gedreht, sodass genau eine Ecke zuerst auftrifft.
+    // Ein Stoss ausserhalb des Schwerpunkts muss Drehung erzeugen; ein
+    // elastischer muss dabei Translation plus Rotation erhalten.
+    const orientation = quatMultiply(axisAngle([1, 0, 0], 20), axisAngle([0, 1, 0], 30));
+    const recording = runScenario(
+      scene([plane("glatt-elastisch"), body("klotz", "glatt-elastisch", [0, 0, 0.5], { velocity: [0, 0, -1], orientation })], {
+        duration: 1,
+      }),
+    );
+    const end = lastOf(recording, "klotz").mechanics;
+    const mass = cubeMass(HALF);
+    const inertia = (mass * 2 * HALF * HALF) / 3;
+    // Wuerfel: I ist kugelsymmetrisch, E_rot = 1/2 I |omega|^2 in jeder Lage.
+    const energy = 0.5 * mass * Math.hypot(...end.linearVelocity) ** 2 + 0.5 * inertia * Math.hypot(...end.angularVelocity) ** 2;
+    assert.ok(Math.abs(energy - 0.5 * mass) < 1e-9, `Energie ${energy} statt ${0.5 * mass}`);
+    assert.ok(Math.hypot(...end.angularVelocity) > 0.5, `kaum Drehung: ${[...end.angularVelocity]}`);
+    // Reibungsfrei: der Impuls wirkt nur entlang der Normale z.
+    assert.ok(Math.abs(end.linearVelocity[0]) < 1e-12 && Math.abs(end.linearVelocity[1]) < 1e-12);
+  });
+});
+
 describe("Determinismus der Kollision", () => {
   it("liefert bei zwei Laeufen identische Aufzeichnungen", () => {
     const build = () =>
@@ -495,6 +635,70 @@ describe("Ueberlappung (overlapBodies)", () => {
     assertNormal(out.normal, [0, 0, 1]);
     assert.equal(overlapBodies(fake([0.2, 0.3, 1.4], ball), fake([0, 0, 0], cube(1)), out), true);
     assertNormal(out.normal, [0, 0, -1]);
+  });
+
+  /** Die gueltigen Kontaktpunkte, gerundet und sortiert, damit die Reihenfolge des Beschneidens nicht zaehlt. */
+  const pointsOf = (out: ReturnType<typeof createOverlap>): string[] =>
+    out.points
+      .slice(0, out.count)
+      .map((p) => p.map((value) => (Math.abs(value) < 1e-12 ? 0 : value).toFixed(6)).join(" "))
+      .sort();
+
+  it("liefert bei Flaeche auf Flaeche die Ecken der gemeinsamen Kontaktflaeche", () => {
+    // b liegt um 0,5 versetzt auf a: die Kontaktflaeche reicht in x von -0,5
+    // (Rand von b) bis 1 (Rand von a), nicht ueber die ganze Unterseite von b.
+    const out = createOverlap();
+    assert.equal(overlapBodies(fake([0, 0, 0], cube(1)), fake([0.5, 0, 1.9], cube(1)), out), true);
+    assert.deepEqual(pointsOf(out), [
+      "-0.500000 -1.000000 0.900000",
+      "-0.500000 1.000000 0.900000",
+      "1.000000 -1.000000 0.900000",
+      "1.000000 1.000000 0.900000",
+    ]);
+    for (let i = 0; i < out.count; i += 1) assert.ok(Math.abs(out.depths[i]! - 0.1) < 1e-12);
+  });
+
+  it("legt den Kontaktpunkt kreuzender Kanten auf die Kreuzung", () => {
+    const out = createOverlap();
+    const delta = 0.01;
+    const a = fake([0, 0, 0], cube(1), [SIN_22_5, 0, 0, COS_22_5]);
+    const b = fake([0, 0, 2 * Math.SQRT2 - delta], cube(1), [0, SIN_22_5, 0, COS_22_5]);
+    overlapBodies(a, b, out);
+    assert.equal(out.count, 1);
+    assertNormal(out.points[0]!, [0, 0, Math.SQRT2 - delta / 2]);
+  });
+
+  const segment = (center: Vec3, halfExtentU: number): ResolvedSegment => ({
+    id: "oben",
+    center: [...center],
+    normal: [0, 0, 1],
+    tangent: [1, 0, 0],
+    bitangent: [0, 1, 0],
+    halfExtentU,
+    halfExtentV: 1,
+    thickness: 0.01,
+  });
+
+  it("beschneidet die Auflageflaeche am Rand einer Platte", () => {
+    // Der Quader ragt ueber den Plattenrand bei x = 0 hinaus: Kontaktpunkte sind
+    // die Ecken des aufliegenden Teils, zwei davon auf dem Rand.
+    const out = createOverlap();
+    const box = fake([0.05, 0, 0.09], cube(0.1));
+    assert.equal(overlapSurface(box, segment([-1, 0, 0], 1), out), true);
+    assert.deepEqual(pointsOf(out), [
+      "-0.050000 -0.100000 -0.010000",
+      "-0.050000 0.100000 -0.010000",
+      "0.000000 -0.100000 -0.010000",
+      "0.000000 0.100000 -0.010000",
+    ]);
+    assertNormal(out.normal, [0, 0, 1]);
+  });
+
+  it("findet bei einem Quader auf der Kante deren zwei Endpunkte", () => {
+    const out = createOverlap();
+    const box = fake([0, 0, 0.1 * Math.SQRT2 - 0.001], cube(0.1), [0, SIN_22_5, 0, COS_22_5]);
+    assert.equal(overlapSurface(box, segment([0, 0, 0], 5), out), true);
+    assert.deepEqual(pointsOf(out), ["0.000000 -0.100000 -0.001000", "0.000000 0.100000 -0.001000"]);
   });
 
   it("schiebt eine Kugel mit Mittelpunkt im Quader durch die naechste Flaeche hinaus", () => {

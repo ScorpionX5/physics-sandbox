@@ -19,6 +19,7 @@ import {
   entityRotationDegrees,
   listMaterials,
   setBodyHalfExtents,
+  setBodyInitialAngularVelocity,
   setBodyInitialVelocity,
   setConstraintDimensions,
   setEntityMaterial,
@@ -270,6 +271,14 @@ function changeOnly(property: string): never {
 
 const DEGREES_PER_RADIAN = 180 / Math.PI;
 
+function degreesPerSecond(omega: Vec3): Vec3 {
+  return [omega[0] * DEGREES_PER_RADIAN, omega[1] * DEGREES_PER_RADIAN, omega[2] * DEGREES_PER_RADIAN];
+}
+
+function radiansPerSecond(degrees: Vec3): Vec3 {
+  return [degrees[0] / DEGREES_PER_RADIAN, degrees[1] / DEGREES_PER_RADIAN, degrees[2] / DEGREES_PER_RADIAN];
+}
+
 /**
  * Alle Eigenschaften. Die Reihenfolge hier ist die Reihenfolge innerhalb
  * einer Gruppe.
@@ -401,6 +410,21 @@ export const ENTITY_PROPERTIES: readonly EntityProperty[] = [
     set: setBodyInitialVelocity,
   },
   {
+    // Angezeigt in Grad je Sekunde wie "Winkelgeschw." in Aenderungen,
+    // gespeichert in rad/s.
+    id: "initialAngularVelocity",
+    label: "Startwinkelgeschw.",
+    type: "vector3",
+    group: "kinematics",
+    classes: ["body"],
+    unit: "°/s",
+    step: 15,
+    get: (_scenario, spec) =>
+      spec.kind === "body" ? degreesPerSecond(spec.velocity.angular) : wrongClass("initialAngularVelocity", spec),
+    set: (scenario, entityId, degrees) =>
+      setBodyInitialAngularVelocity(scenario, entityId, radiansPerSecond(degrees)),
+  },
+  {
     // Die Geschwindigkeit waehrend des Laufs ist Zustand: es gibt sie nur als
     // Aenderung. Der Startwert ist "Startgeschw." darueber.
     id: "linearVelocity",
@@ -433,14 +457,8 @@ export const ENTITY_PROPERTIES: readonly EntityProperty[] = [
     set: () => changeOnly("angularVelocity"),
     change: {
       key: "angularVelocity",
-      fromChange: (change) => {
-        const omega = valueOf(change, "angularVelocity");
-        return [omega[0] * DEGREES_PER_RADIAN, omega[1] * DEGREES_PER_RADIAN, omega[2] * DEGREES_PER_RADIAN];
-      },
-      toChange: (degrees) => ({
-        key: "angularVelocity",
-        value: [degrees[0] / DEGREES_PER_RADIAN, degrees[1] / DEGREES_PER_RADIAN, degrees[2] / DEGREES_PER_RADIAN],
-      }),
+      fromChange: (change) => degreesPerSecond(valueOf(change, "angularVelocity")),
+      toChange: (degrees) => ({ key: "angularVelocity", value: radiansPerSecond(degrees) }),
     },
   },
   {

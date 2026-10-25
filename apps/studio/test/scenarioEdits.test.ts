@@ -42,6 +42,7 @@ import {
   setViewLayer,
   setConstraintSize,
   setBodyHalfExtents,
+  setBodyInitialAngularVelocity,
   setBodyInitialVelocity,
   setBodyMass,
   setEntityPose,
@@ -413,6 +414,13 @@ describe("Objekteigenschaften", () => {
     const next = setBodyInitialVelocity(durchstich, "klotz", [5, 0, 0]);
     const recording = runScenario(next);
     assert.deepEqual(recording.snapshots[0]!.entities["klotz"]!.mechanics!.linearVelocity, [5, 0, 0]);
+  });
+
+  it("setzt eine Startwinkelgeschwindigkeit, und der Koerper dreht sich von Anfang an", () => {
+    const next = setBodyInitialAngularVelocity(durchstich, "klotz", [0, 0, 2]);
+    const recording = runScenario(next);
+    const omega = recording.snapshots[0]!.entities["klotz"]!.mechanics!.angularVelocity;
+    assert.ok(Math.abs(omega[2]! - 2) < 1e-9, `omega = ${omega}`);
   });
 
   it("lehnt eine nicht positive Masse ab", () => {

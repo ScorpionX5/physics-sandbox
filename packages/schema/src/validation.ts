@@ -200,6 +200,16 @@ function validateMaterial(material: Material, result: ValidationResult): Materia
     }
   }
 
+  // Gleitreibung ueber Haftreibung ist kein Stoff, sondern ein Zahlendreher -
+  // aber welcher der beiden Werte falsch ist, laesst sich nicht entscheiden.
+  const { staticFriction, kineticFriction } = next.mechanical;
+  if (staticFriction !== undefined && kineticFriction !== undefined && kineticFriction > staticFriction) {
+    result.errors.push(
+      `Gleitreibungszahl (${kineticFriction}) liegt ueber der Haftreibungszahl (${staticFriction}). ` +
+        `Nicht reparierbar, weil unklar ist, welcher Wert gemeint war.`,
+    );
+  }
+
   // --- Element identifizieren: explizite Ordnungszahl, sonst Name oder Formel
   let element = next.chemical?.atomicNumber !== undefined
     ? elementByNumber(next.chemical.atomicNumber)

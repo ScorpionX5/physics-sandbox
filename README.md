@@ -15,8 +15,9 @@ Das Ergebnis ist **keine Videodatei**, sondern eine abspielbare, weiter
 bedienbare Aufzeichnung: Kamera frei drehbar, Zeit scrubbar, Darstellungsebene
 umschaltbar, Eingriffe änderbar und neu simulierbar.
 
-**Stand:** Stufe 1 — klassische Mechanik (Translation, Rotation, Kontakt ohne
-Reibung). Thermodynamik und Chemie haben ihren Platz im Schema und in der
+**Stand:** Stufe 1 und Reibung aus Stufe 2 — klassische Mechanik (Translation,
+Rotation, Kontakt mit Kontaktdrehmoment: Körper kippen über Ecken und Kanten;
+Haft-, Gleit-, Bohr- und Rollreibung aus den Materialien der Paarung). Thermodynamik und Chemie haben ihren Platz im Schema und in der
 Pipeline, sind aber noch nicht implementiert. Siehe
 [Was noch nicht da ist](#was-noch-nicht-da-ist).
 
@@ -115,6 +116,10 @@ setzt ein *Ändern* seine Geschwindigkeit auf Null — reibungsfrei gibt es nich
 was ihn sonst bremsen würde. Genau deshalb gibt es diesen Eingriff: er zeigt,
 dass ein Eingriff den laufenden Zustand ändert.
 
+Reibungsfrei ist es, weil Rampe und Auslauf aus **Glatt** sind. Wer beiden
+Ebenen Standard gibt, sieht den Unterschied: der Klotz bremst beim Aufprall,
+rutscht langsamer ab und bleibt auf dem Auslauf von selbst stehen.
+
 Die Rampe ist dabei **zwei Instanzen derselben Festen Ebene**: eine um −30°
 gedrehte und ein waagerechter Auslauf. Das lohnt den Blick in die
 Eigenschaften — es ist der ganze Flächenentwurf in einem Beispiel.
@@ -168,7 +173,7 @@ welche Dateien anzufassen sind.
 ## Verifikation
 
 ```bash
-npm test          # 227 Tests über fünf Pakete
+npm test          # 360 Tests über fünf Pakete
 npm run typecheck # alle Pakete
 ```
 
@@ -178,11 +183,20 @@ Erwartungswerte:
 | Test | Erwartung | gemessen |
 |---|---|---|
 | Freier Fall | `s = ½gt²`, `v = gt` | relativ < 10⁻⁹ |
-| Gleiten auf 30°-Ebene | `a = g·sin 30° = 4,905 m/s²` | **4,905000000**, Abw. 8 · 10⁻¹⁵ |
+| Gleiten auf 30°-Ebene | `a = g·sin 30° = 4,905 m/s²` | **4,905000000**, Abw. 1,3 · 10⁻¹³ |
 | Horizontaler Auslauf | `a = 0` | exakt 0 |
 | Durchdringung | ≥ 0 | −1,2 · 10⁻¹⁶ m |
 | Drehimpuls, unsymmetrisch | `\|L\|` konstant | bitgenau |
 | Energie im freien Fall | `mgh + ½mv²` konstant | relativ < 10⁻⁹ |
+| Kippen über eine Plattenkante, reibungsfrei | `α = m·g·d / (I + m·d²)` | relativ 0,5 % |
+| Kippen um die haftende Kante | `α = g(d − f) / (I/m + d² + h²)` | relativ 0,2 % |
+| Gleiten mit Reibung, 30° | `a = g(sin α − μ_G cos α)` | relativ 2 · 10⁻¹⁴ |
+| Haften, 20° | liegt still | 1 · 10⁻⁹ m in 1 s |
+| Bremsweg | `s = v₀² / (2 μ_G g)` | relativ 8 · 10⁻⁷ |
+| Kugel: Gleiten → Rollen | `v = 5/7 · v₀` | relativ 4 · 10⁻¹⁵ |
+| Kugel rollt die Ebene hinab | `a = 5/7 · g sin α` | relativ 8 · 10⁻¹⁵ |
+| Rollreibung | `a = −5/7 · g · f / r` | relativ 3 · 10⁻¹³ |
+| Stoß auf eine Ecke, e = 1 | Translation + Rotation konstant | relativ 3 · 10⁻¹⁶ |
 | Determinismus | zwei Läufe gleich | byte-identisch |
 | Rundweg Winkel → Quaternion → Winkel | Eingabe = Ausgabe | < 10⁻⁹ ° |
 | Datei schreiben → lesen → schreiben | Zeichen für Zeichen gleich | identisch |
@@ -223,9 +237,9 @@ Mit Absicht, in dieser Reihenfolge:
 
 | | Status |
 |---|---|
-| Reibung, Luftwiderstand | Stufe 2. Materialdaten liegen bereit, kein Modul liest sie. |
+| Luftwiderstand | Rest von Stufe 2. Reibung ist da. |
+| Reibwerte je Paarung | Reibung steht je Material und wird als geometrisches Mittel gepaart. Eine Tabelle gemessener Paarungen, die davor greift, wäre eine Ergänzung in `pairFriction`. |
 | Kugeln und andere Körperformen in der Oberfläche | Das Schema kennt `sphere`, die Oberfläche legt nur Blöcke an. |
-| Kontaktdrehmoment (Kippen, Kantenkontakt, Stapel) | Stufe 1b. Der Klotz berührt die schiefe Ebene mit einer Ecke statt mit der Fläche — sichtbarer Effekt, [erklärt](docs/architektur.md#was-stufe-1-bewusst-nicht-kann). |
 | Thermodynamik | Stufe 3. Pipeline-Phase `exchange` ist registriert und leer. |
 | Chemie | Stufe 4. Phase `transform` leer; Elementbilanz-Prüfung steht schon. |
 | Subatomare, thermische, Feld-Ansicht | Schalenbesetzung wird berechnet, Renderer fehlen. |

@@ -37,10 +37,31 @@ export const STANDARD: Material = {
   kind: "material",
   id: "standard",
   name: "Standard",
-  mechanical: { density: 1000, restitution: 0, staticFriction: 0.5, kineticFriction: 0.4 },
+  mechanical: { density: 1000, restitution: 0, staticFriction: 0.5, kineticFriction: 0.4, rollingFriction: 0.001 },
   appearance: {
     macroscopic: { color: "#4a5568", metalness: 0.1, roughness: 0.8, opacity: 1 },
     atomic: { atomColor: "#7b8494", atomRadius: 140, lattice: "amorphous", latticeConstant: 400 },
+  },
+};
+
+/**
+ * **Glatt** - ideal reibungsfrei, wie Standard ein didaktisches Material und
+ * kein Stoff.
+ *
+ * Reibwerte 0: weil eine Paarung das geometrische Mittel der beiden
+ * Materialien nimmt, gleitet alles reibungsfrei, was auf Glatt liegt - egal,
+ * aus welchem Material es ist. Damit bleibt der Lehrbuchfall "reibungsfreie
+ * schiefe Ebene" baubar, und der Vergleich mit und ohne Reibung ist ein
+ * Materialwechsel der Ebene.
+ */
+export const SMOOTH: Material = {
+  kind: "material",
+  id: "glatt",
+  name: "Glatt",
+  mechanical: { density: 1000, restitution: 0, staticFriction: 0, kineticFriction: 0, rollingFriction: 0 },
+  appearance: {
+    macroscopic: { color: "#9fc4d8", metalness: 0.1, roughness: 0.1, opacity: 1 },
+    atomic: { atomColor: "#b5d3e3", atomRadius: 140, lattice: "amorphous", latticeConstant: 400 },
   },
 };
 
@@ -55,8 +76,11 @@ export const IRON: Material = {
     // Stosszahl (etwa Standard, 0) wird sie ueberstimmt - die Paarung nimmt das
     // Minimum.
     restitution: 0.4,
+    // Reibwerte von Stahl auf Stahl, trocken. Die Paarung nimmt das
+    // geometrische Mittel mit dem Partner (`pairFriction` im Kern).
     staticFriction: 0.74,
     kineticFriction: 0.57,
+    rollingFriction: 0.0005,
   },
   thermal: {
     specificHeatCapacity: 449,
@@ -77,7 +101,13 @@ export const ALUMINIUM: Material = {
   id: "aluminium",
   name: "Aluminium",
   formula: "Al",
-  mechanical: { density: 2700, restitution: 0.35, staticFriction: 0.61, kineticFriction: 0.47 },
+  mechanical: {
+    density: 2700,
+    restitution: 0.35,
+    staticFriction: 0.61,
+    kineticFriction: 0.47,
+    rollingFriction: 0.0007,
+  },
   thermal: {
     specificHeatCapacity: 897,
     thermalConductivity: 237,
@@ -101,7 +131,13 @@ export const WOOD: Material = {
   kind: "material",
   id: "holz",
   name: "Holz",
-  mechanical: { density: 700, restitution: 0.3, staticFriction: 0.45, kineticFriction: 0.35 },
+  mechanical: {
+    density: 700,
+    restitution: 0.3,
+    staticFriction: 0.45,
+    kineticFriction: 0.35,
+    rollingFriction: 0.0015,
+  },
   thermal: { specificHeatCapacity: 1700, thermalConductivity: 0.12, emissivity: 0.9 },
   appearance: {
     macroscopic: { color: "#9a6b3f", metalness: 0, roughness: 0.9, opacity: 1 },
@@ -187,6 +223,7 @@ export const BUILTIN_LIBRARY: LibraryEntry[] = [
   // eine neue Ebene bekommt das erste Material der Bibliothek (`addBody` und
   // `addConstraint` in der Oberflaeche).
   entry(STANDARD),
+  entry(SMOOTH),
   entry(IRON),
   entry(ALUMINIUM),
   entry(WOOD),
@@ -257,7 +294,9 @@ export const RAMP_ORIENTATION = quaternionFromEulerDegrees(0, RAMP_INCLINE_DEGRE
  * Das Durchstich-Szenario: ein Klotz faellt auf die schiefe Ebene, rutscht ab
  * und gleitet auf den horizontalen Auslauf. Bei t = 2 s wird seine
  * Geschwindigkeit auf 0 gesetzt, damit er stehen bleibt - reibungsfrei gibt es
- * nichts, was ihn sonst bremsen wuerde. Genau das ist der Grund fuer diesen
+ * nichts, was ihn sonst bremsen wuerde. Reibungsfrei ist der Lauf, weil Rampe und
+ * Auslauf aus Glatt sind (`SMOOTH`); mit Standard bremst die Reibung den Klotz
+ * schon auf der Rampe und haelt ihn auf dem Auslauf von selbst an. Genau das ist der Grund fuer diesen
  * Eingriff: er zeigt, dass ein Eingriff den laufenden Zustand aendert.
  *
  * Die Rampe besteht aus **zwei Instanzen** der "Ebene": einer geneigten
@@ -287,7 +326,7 @@ export function createInclinedPlaneScenario(): Scenario {
         kind: "constraint",
         id: "schiefe-ebene",
         constraintId: "ebene",
-        materialId: STANDARD.id,
+        materialId: SMOOTH.id,
         name: "Schiefe Ebene",
         // Mittelpunkt 2 m bergauf von der Knickkante bei (0, 0, 0).
         pose: { position: [-1.732, 0, 1], orientation: RAMP_ORIENTATION },
@@ -297,7 +336,7 @@ export function createInclinedPlaneScenario(): Scenario {
         kind: "constraint",
         id: "auslauf",
         constraintId: "ebene",
-        materialId: STANDARD.id,
+        materialId: SMOOTH.id,
         name: "Auslauf",
         pose: { position: [4, 0, 0], orientation: [0, 0, 0, 1] },
         size: [4.125, 1],

@@ -3,6 +3,7 @@ import type {
   EntitySpec,
   Environment,
   Intervention,
+  Material,
   Recording,
   RunEvent,
   Scenario,
@@ -22,6 +23,7 @@ import {
   makeMechanicalState,
   resolveGravity,
   resolveSegments,
+  type ContactProperties,
   type RuntimeBody,
   type RuntimeEntity,
   type RuntimeLoad,
@@ -29,6 +31,23 @@ import {
   type SimState,
 } from "./state.js";
 import { q4copy, v3copy, v3set } from "./math/index.js";
+
+/**
+ * Die Kontaktwerte eines Materials, fuer Koerper und Ebene gleich.
+ *
+ * Ein fehlender Reibwert heisst reibungsfrei (siehe `MechanicalProperties`).
+ * Aufgeloest wird hier und nicht im Mechanik-Modul, damit der Kontaktloeser
+ * nie nach `undefined` fragen muss.
+ */
+function contactProperties(material: Material): ContactProperties {
+  const mechanical = material.mechanical;
+  return {
+    restitution: mechanical.restitution,
+    staticFriction: mechanical.staticFriction ?? 0,
+    kineticFriction: mechanical.kineticFriction ?? 0,
+    rollingFriction: mechanical.rollingFriction ?? 0,
+  };
+}
 
 /**
  * Der Simulator: fuehrt ein Szenario aus und erzeugt eine Aufzeichnung.
@@ -120,7 +139,7 @@ export class Simulator {
       inverseMass: spec.kinematic ? 0 : 1 / mass,
       inertiaBody,
       inverseInertiaBody: spec.kinematic ? invertDiagonal([0, 0, 0, 0, 0, 0, 0, 0, 0]) : invertDiagonal(inertiaBody),
-      restitution: material.mechanical.restitution,
+      ...contactProperties(material),
     };
   }
 
@@ -139,13 +158,13 @@ export class Simulator {
   }
 
   /**
-   * Material und Stosszahl einer Ebene. Eine Stelle fuer Anlegen und Aendern,
-   * wie `bodyProperties`: nach einem Materialwechsel prallt ein Koerper sonst
-   * noch mit der alten Stosszahl ab.
+   * Material, Stosszahl und Reibwerte einer Ebene. Eine Stelle fuer Anlegen und
+   * Aendern, wie `bodyProperties`: nach einem Materialwechsel prallt ein Koerper
+   * sonst noch mit der alten Stosszahl ab und rutscht mit der alten Reibung.
    */
   private surfaceMaterial(spec: Extract<EntitySpec, { kind: "constraint" }>) {
     const material = this.library.material(spec.materialId);
-    return { materialId: spec.materialId, material, restitution: material.mechanical.restitution };
+    return { materialId: spec.materialId, material, ...contactProperties(material) };
   }
 
   private createSurface(spec: Extract<EntitySpec, { kind: "constraint" }>): RuntimeSurface {

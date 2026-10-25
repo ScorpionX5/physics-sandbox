@@ -24,7 +24,7 @@ import { Finite, HexColor, Id, Vec3 } from "./primitives.js";
 
 // ---------------------------------------------------------------- Material
 
-/** Mechanische Materialdaten - Stufe 1. Die einzige Gruppe, die Pflicht ist. */
+/** Mechanische Materialdaten - Stufe 1 und 2. Die einzige Gruppe, die Pflicht ist. */
 export const MechanicalProperties = z.object({
   /** kg/m^3. Zusammen mit dem Volumen des Koerpers ergibt sie die Masse. */
   density: Finite.positive(),
@@ -33,10 +33,22 @@ export const MechanicalProperties = z.object({
    * Paarung (Koerper-Koerper, Koerper-Ebene) als Minimum der beiden Materialien.
    */
   restitution: Finite.min(0).max(1),
-  /** Haftreibungskoeffizient - Stufe 2, noch von keinem Modul gelesen. */
+  /**
+   * Haftreibungszahl mu_H. Wie die Stosszahl ein Wert je Material; die Paarung
+   * verrechnet der Kern (`pairFriction` in mechanics.ts). Fehlt der Wert, ist
+   * das Material reibungsfrei - so verhielt sich jedes Material, bevor die
+   * Mechanik Reibung kannte, und so laden aeltere Dateien unveraendert.
+   */
   staticFriction: Finite.min(0).optional(),
-  /** Gleitreibungskoeffizient - Stufe 2. */
+  /** Gleitreibungszahl mu_G, nicht groesser als die Haftreibungszahl. Fehlt sie: reibungsfrei. */
   kineticFriction: Finite.min(0).optional(),
+  /**
+   * Hebelarm der Rollreibung f in Metern: das Rollreibungsmoment ist hoechstens
+   * f * N. Eine Laenge und keine Zahl, weil sie aus der Verformung an der
+   * Auflage kommt - der Rollwiderstand eines Rads ist f / r, haengt also vom
+   * Radius ab, f nicht. Fehlt er: kein Rollwiderstand.
+   */
+  rollingFriction: Finite.min(0).max(0.1).optional(),
   /** Elastizitaetsmodul in Pa - Stufe 2 (weiche Kontakte). */
   youngsModulus: Finite.positive().optional(),
 });

@@ -37,7 +37,7 @@ const IRON_DRAFT: LibrarianDraft = {
   material: {
     name: "Eisen",
     formula: "Fe",
-    mechanical: { density: 7874, restitution: 0.4, staticFriction: 0.74, kineticFriction: 0.57 },
+    mechanical: { density: 7874, restitution: 0.4, staticFriction: 0.74, kineticFriction: 0.57, rollingFriction: 0.0005 },
     thermal: {
       specificHeatCapacity: 449,
       thermalConductivity: 80.4,
@@ -144,7 +144,7 @@ describe("Zusammenbau eines Materials", () => {
     // wegfaellt.
     const wrong: LibrarianDraft = {
       ...IRON_DRAFT,
-      material: { ...IRON_DRAFT.material!, mechanical: { density: 1200, restitution: 0.4 } },
+      material: { ...IRON_DRAFT.material!, mechanical: { ...IRON_DRAFT.material!.mechanical, density: 1200 } },
     };
     const result = assembleEntry(wrong, { prompt: "Eisen", model: "attrappe" });
     assert.equal(result.ok, true);

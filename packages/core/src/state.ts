@@ -79,7 +79,23 @@ export interface MechanicalEntityState {
   contactCount: number;
 }
 
-export interface RuntimeBody {
+/**
+ * Was ein Kontakt vom Material eines Beteiligten braucht. Verrechnet wird je
+ * Paarung im Mechanik-Modul (`pairRestitution`, `pairFriction`); hier steht
+ * nur der Wert des einen Materials, aufgeloest von `contactProperties` in
+ * simulate.ts - ein fehlender Reibwert ist dort schon 0.
+ */
+export interface ContactProperties {
+  restitution: number;
+  /** Haftreibungszahl. */
+  staticFriction: number;
+  /** Gleitreibungszahl. */
+  kineticFriction: number;
+  /** Hebelarm der Rollreibung in Metern. */
+  rollingFriction: number;
+}
+
+export interface RuntimeBody extends ContactProperties {
   kind: "body";
   id: string;
   name: string;
@@ -93,12 +109,11 @@ export interface RuntimeBody {
   inverseMass: number;
   inertiaBody: M3;
   inverseInertiaBody: M3;
-  restitution: number;
   kinematic: boolean;
   mechanics: MechanicalEntityState;
 }
 
-export interface RuntimeSurface {
+export interface RuntimeSurface extends ContactProperties {
   kind: "surface";
   id: string;
   name: string;
@@ -111,9 +126,8 @@ export interface RuntimeSurface {
   position: V3;
   orientation: Q4;
   materialId: string;
+  /** Liefert auch Stosszahl und Reibwerte - aus dem Material der Ebene, nicht aus dem Bibliothekseintrag. */
   material: Material;
-  /** Aus dem Material der Ebene, nicht aus dem Bibliothekseintrag. */
-  restitution: number;
 }
 
 /**

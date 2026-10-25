@@ -286,6 +286,20 @@ describe("Pruefung der Bibliothekseintraege", () => {
     assert.ok(result.errors.some((e) => e.includes("Schmelzpunkt")));
   });
 
+  it("lehnt eine Gleitreibung ueber der Haftreibung ab, statt zu raten", () => {
+    const result = validateLibraryEntry(
+      asLibrarian({ ...IRON, mechanical: { ...IRON.mechanical, staticFriction: 0.4, kineticFriction: 0.6 } }),
+    );
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.some((e) => e.includes("Gleitreibungszahl")), result.errors.join("; "));
+  });
+
+  it("laedt ein Material ohne Reibwerte, wie es vor der Reibung gespeichert wurde", () => {
+    const { staticFriction: _s, kineticFriction: _k, rollingFriction: _r, ...older } = IRON.mechanical;
+    const result = validateLibraryEntry(asLibrarian({ ...IRON, mechanical: older }));
+    assert.equal(result.ok, true, result.errors.join("; "));
+  });
+
   it("normiert nicht normierte Flaechennormalen, statt die Randbedingung zu verwerfen", () => {
     const segments = PLANE.behaviour.constraintType === "staticSurface" ? PLANE.behaviour.segments : [];
     const skewed = {

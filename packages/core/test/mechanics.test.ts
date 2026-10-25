@@ -24,6 +24,7 @@ import {
   ModuleRegistry,
   penetrationReport,
   potentialEnergy,
+  resolveScenarioSegments,
   runScenario,
   sampleNearest,
   Simulator,
@@ -382,11 +383,13 @@ describe("Durchstich: Klotz auf der schiefen Ebene", () => {
     );
   });
 
-  it("loescht beim Aufprall die Normalkomponente vollstaendig", () => {
-    // Stosszahl 0: nach dem Aufprall darf keine Geschwindigkeit mehr in die
-    // Flaeche hinein zeigen.
+  it("loescht nach dem Aufsetzen die Normalkomponente vollstaendig", () => {
+    // Stosszahl 0: liegt der Klotz flach auf, darf keine Geschwindigkeit mehr in
+    // die Flaeche hinein zeigen. Erst ab 0,7 s: der Klotz trifft bei 0,46 s mit
+    // einer Ecke auf, kippt, landet ueber die Flaeche hinaus auf der anderen
+    // Kante und schaukelt bis etwa 0,65 s zurueck.
     const normal = inclineNormal();
-    for (const t of [0.55, 0.7, 0.9]) {
+    for (const t of [0.7, 0.8, 0.9]) {
       const sample = sampleNearest(recording, "klotz", t);
       const normalSpeed =
         sample.mechanics.linearVelocity[0] * normal[0] +
@@ -435,6 +438,30 @@ describe("Durchstich: Klotz auf der schiefen Ebene", () => {
       `Tangentialkomponente aenderte sich um ${(after - before).toExponential(4)}, ` +
         `erwartet ${expectedGain.toExponential(4)} - der Kontaktloeser greift in die Flaeche ein`,
     );
+  });
+
+  it("kippt nach dem Aufprall auf der Ecke flach auf die Rampe", () => {
+    // Der Kontaktimpuls greift an der Ecke an, nicht am Schwerpunkt, und dreht
+    // den Klotz. Danach liegt er mit der ganzen Flaeche auf: seine Drehung ist
+    // die der Rampe, und sein Mittelpunkt liegt eine halbe Kante ueber ihr -
+    // nicht die halbe Raumdiagonale, wie wenn er auf der Ecke stuende.
+    const sample = sampleNearest(recording, "klotz", 0.9);
+    const q = sample.mechanics.orientation;
+    const alignment = Math.abs(
+      q[0] * RAMP_ORIENTATION[0] + q[1] * RAMP_ORIENTATION[1] + q[2] * RAMP_ORIENTATION[2] + q[3] * RAMP_ORIENTATION[3],
+    );
+    assert.ok(1 - alignment < 1e-9, `Drehung ${[...q]}, erwartet die der Rampe ${RAMP_ORIENTATION}`);
+
+    const normal = inclineNormal();
+    const ramp = resolveScenarioSegments(recording).find(
+      (segment) => Math.abs(segment.normal[0] - normal[0]) + Math.abs(segment.normal[2] - normal[2]) < 1e-9,
+    )!;
+    const p = sample.mechanics.position;
+    const height =
+      (p[0] - ramp.center[0]) * normal[0] + (p[1] - ramp.center[1]) * normal[1] + (p[2] - ramp.center[2]) * normal[2];
+    assert.ok(Math.abs(height - BLOCK_HALF_EXTENTS[2]) < 1e-4, `Mittelpunkt ${height} m ueber der Rampe`);
+    const spin = Math.hypot(...sample.mechanics.angularVelocity);
+    assert.ok(spin < 1e-9, `dreht noch mit ${spin} rad/s`);
   });
 
   it("dringt nirgends in eine Flaeche ein", () => {

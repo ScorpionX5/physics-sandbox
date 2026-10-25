@@ -38,6 +38,29 @@ import {
 // ---------------------------------------------------------------- Ausgabeform
 
 /**
+ * Mechanische Werte im Entwurf: wie im Schema, aber mit Pflicht-Reibwerten.
+ *
+ * Im Schema darf die Reibung fehlen (dann ist das Material reibungsfrei), damit
+ * aeltere Dateien laden. Ein neues Material vom Modell soll sie mitbringen - ein
+ * vergessener Wert hiesse sonst still "gleitet wie auf Eis".
+ */
+const MechanicalDraft = MechanicalProperties.extend({
+  staticFriction: z
+    .number()
+    .min(0)
+    .describe("Haftreibungszahl des Materials gegen sich selbst, trocken (Stahl auf Stahl: 0.74)"),
+  kineticFriction: z
+    .number()
+    .min(0)
+    .describe("Gleitreibungszahl gegen sich selbst, trocken, hoechstens die Haftreibungszahl (Stahl: 0.57)"),
+  rollingFriction: z
+    .number()
+    .min(0)
+    .max(0.1)
+    .describe("Hebelarm der Rollreibung in Metern, gegen sich selbst (Stahl: 0.0005, Holz: 0.0015)"),
+});
+
+/**
  * Entwurf eines Materials. Ohne `kind` und `id`: beide setzt der Code, damit das
  * Modell keine Ids erfinden kann, die mit bestehenden kollidieren.
  */
@@ -48,7 +71,7 @@ export const MaterialDraft = z.object({
     .max(60)
     .optional()
     .describe("Summenformel, falls sinnvoll: \"Fe\", \"O2\", \"Fe2O3\". Bei Stoffgemischen weglassen."),
-  mechanical: MechanicalProperties,
+  mechanical: MechanicalDraft,
   thermal: ThermalProperties.optional(),
   chemical: ChemicalProperties.optional(),
   appearance: Appearance,
@@ -281,7 +304,8 @@ Regeln:
 - Bei Stoffgemischen und Werkstoffen ohne klare Summenformel (Holz, Stahl, Beton) lass "formula" weg.
 - Farben waehle so, dass das Material wiedererkennbar ist: Metalle grau mit hohem metalness-Wert, Rost rotbraun, Gase blass und mit geringer opacity.
 - Fuer die atomare Ansicht gib Atomradius und Gitterkonstante in Pikometern an; ihr Verhaeltnis bestimmt die dargestellte Packungsdichte und soll stimmen.
-- Bei Randbedingungen (constraint) gib nur Laenge, Breite und Dicke an; Aussehen und Stosszahl kommen vom Material, das der Benutzer der Flaeche zuweist. Eine Randbedingung ist immer eine einzelne, waagerechte Flaeche; Neigung, Lage und Groesse legt der Benutzer beim Platzieren fest. Erzeuge also keine fertigen Rampen.
+- Reibwerte (Haft-, Gleitreibungszahl, Hebelarm der Rollreibung) gibst du fuer das Material gegen sich selbst an, trocken. Die Sandbox bildet die Werte einer Paarung als geometrisches Mittel der beiden Materialien.
+- Bei Randbedingungen (constraint) gib nur Laenge, Breite und Dicke an; Aussehen, Stosszahl und Reibung kommen vom Material, das der Benutzer der Flaeche zuweist. Eine Randbedingung ist immer eine einzelne, waagerechte Flaeche; Neigung, Lage und Groesse legt der Benutzer beim Platzieren fest. Erzeuge also keine fertigen Rampen.
 - Waehle "constraint" nur fuer Dinge ohne eigene Materie im Sinne der Simulation: Flaechen, Rampen. Alles Stoffliche ist "material".`;
 
 export interface ClaudeLibrarianOptions {
