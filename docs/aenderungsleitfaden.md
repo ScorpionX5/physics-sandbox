@@ -165,6 +165,11 @@ ist schlimmer als nicht geändert, weil der Fehler dann erst im Lauf auffällt.
 | **Dateiformat** eines Szenarios (auch `view`: Ebene, Achsen, Kamera — fehlt es, gelten die Standardwerte) | `Scenario` in `scenario.ts` (das Schema ist das Format) und `parseScenario` in [scenarioFile.ts](../apps/studio/src/scenarioFile.ts) für Prüfungen, die über das Schema hinausgehen. Geladen wird **immer** durch das Schema (Dateien mit `entity` im `add`-Eingriff, vor Einführung von `Scenario.entities` gespeichert, werden abgelehnt) — auch die eigene Datei von letzter Woche ist fremde Eingabe. |
 | **Endpunkt des Dienstes** | [server.ts](../apps/service/src/server.ts) — und `openApiDocument()` in derselben Datei, sonst beschreibt die OpenAPI-Datei etwas anderes als der Dienst tut. |
 | **Bibliothekar** (Prompt, Modell, Zusammenbau) | [librarian.ts](../apps/service/src/librarian.ts). Der API-Schlüssel verlässt `apps/service` nie. |
+| **Was der Regisseur schreiben darf** (Felder, Einheiten des Szenarioentwurfs) | `ScenarioDraft` in [scenarioDraft.ts](../apps/service/src/scenarioDraft.ts), Umrechnung in `assembleScenario` (Änderungen: `toEntityChange`). Ein neuer Änderungsschlüssel in `CHANGE_KEYS` ist für den Regisseur erst nutzbar, wenn er in `DraftChangeKey` und `toEntityChange` steht. |
+| **Was die Prüfung für den Regisseur meldet** (Fehler, Warnungen, Grenzwerte) | `inspectScenario` in [scenarioDraft.ts](../apps/service/src/scenarioDraft.ts); Grenzwerte `PENETRATION_LIMIT` und `FALL_LIMIT` dort. |
+| **Werkzeuge, Anweisungen und Beispiel für den Regisseur** | [mcp.ts](../apps/service/src/mcp.ts): `createSandboxMcpServer`, `DIRECTOR_INSTRUCTIONS`. Das Beispiel in den Anweisungen ist getestet — es muss fehlerfrei durch die Prüfung gehen. Route, Token und Zustandslosigkeit: `/mcp` in [server.ts](../apps/service/src/server.ts). |
+| **Wo abgelegte Szenarien liegen** | [scenarioStore.ts](../apps/service/src/scenarioStore.ts); Verzeichnis `SCENARIO_DIR`, Studio-Adresse `STUDIO_URL`, Token `MCP_TOKEN` in [index.ts](../apps/service/src/index.ts). Ausgeliefert über `GET /v1/scenarios/:id`. |
+| **Studio lädt ein abgelegtes Szenario** (`?szenario=<kennung>`) | `requestedScenario` und der Lade-Effekt in [App.tsx](../apps/studio/src/App.tsx), Abruf in `fetchStoredScenario` ([scenarioFile.ts](../apps/studio/src/scenarioFile.ts)). Geladen wird über `loadScenario`, damit Zeit und Kamera zurückgesetzt werden. |
 
 ---
 
@@ -261,6 +266,7 @@ Wo der Test für was steht:
 | Bearbeitungsfunktionen der Oberfläche | [apps/studio/test/scenarioEdits.test.ts](../apps/studio/test/scenarioEdits.test.ts) |
 | Eigenschaften: Klassen, Vererbung, Gruppen, Umrechnung | [apps/studio/test/entityProperties.test.ts](../apps/studio/test/entityProperties.test.ts) |
 | Bibliothekar, Zusammenbau, Prüfkette | [apps/service/test/librarian.test.ts](../apps/service/test/librarian.test.ts) |
+| Szenarioentwurf, Prüfbericht, MCP-Endpunkt, Ablage | [apps/service/test/sandboxTools.test.ts](../apps/service/test/sandboxTools.test.ts) |
 
 **Kein Test deckt ab:** wie es aussieht, und den echten Bibliothekar-Aufruf.
 Was dafür von Hand zu prüfen ist, steht im

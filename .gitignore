@@ -31,3 +31,6 @@ desktop.ini
 
 # Claude Code (lokale Einstellungen)
 .claude/settings.local.json
+
+# Vom Regisseur abgelegte Szenarien (SCENARIO_DIR des Dienstes)
+apps/service/data/

@@ -615,7 +615,10 @@ gegenprüfen und übernimmt den KI-Wert mit Hinweis.
 
 - **Bibliothekar**: `claude-sonnet-5-5`. Ein Aufruf mit festem Schema; Opus wäre
   Verschwendung bei einem Aufruf pro Material.
-- **Regisseur**: `claude-opus-5-5`, `effort: "high"`. Lange Agentenschleife.
+- **Regisseur**: läuft in Hermes, das Modell wählt Hermes. Empfohlen bleibt ein
+  starkes Modell (`claude-opus-5-5`, `effort: "high"`): ein schwächeres braucht
+  mehr Prüfrunden, kommt durch die Prüfung aber nicht mit einem kaputten
+  Szenario durch.
 
 Zwei Eigenheiten bestimmen den Code:
 
@@ -623,8 +626,9 @@ Zwei Eigenheiten bestimmen den Code:
   einen 400er. Der Bibliothekar nutzt deshalb `messages.parse()` mit
   `output_config.format`, nicht einen erzwungenen Werkzeugaufruf. Für einen
   Datensatz statt einer Aktion ist das ohnehin das passendere Mittel.
-- Der Regisseur-Loop muss `stop_reason === "pause_turn"` behandeln, sonst bricht
-  ein langer Lauf stillschweigend ab.
+- Wer den Regisseur doch selbst mit der Claude API baut: der Loop muss
+  `stop_reason === "pause_turn"` behandeln, sonst bricht ein langer Lauf
+  stillschweigend ab.
 
 Zur Alternative zwischen Material und Randbedingung: sie ist als Diskriminator plus zwei
 optionale Felder modelliert, nicht als diskriminierte Union. Letztere wird zu
@@ -730,6 +734,8 @@ damit nicht veralten.
 | `GET /v1/health` | Erreichbarkeit, und ob der Bibliothekar eingerichtet ist |
 | `GET /v1/library` | Die Startbibliothek |
 | `GET /v1/scenarios/durchstich` | Ein Szenario zum Abspielen |
+| `GET /v1/scenarios/{id}` | Ein vom Regisseur abgelegtes Szenario |
+| `POST /mcp` | Die Sandbox-Werkzeuge für den Regisseur (MCP, Streamable HTTP) |
 | `POST /v1/library/synthesize` | Bibliothekar: Text rein, geprüftes Objekt raus |
 | `POST /v1/library/validate` | Einen Eintrag prüfen, ohne das Modell zu rufen |
 | `POST /v1/runs` | Szenario rein, Aufzeichnung samt Zusammenfassungen raus |
@@ -754,6 +760,51 @@ Schlüssel im Spiel ist.
 Dasselbe gilt für die Lernplattform: sie kann eine Aufzeichnung serverseitig
 erzeugen *oder* das Szenario an den Browser geben und dort laufen lassen. Beide
 Wege liefern dasselbe Ergebnis, weil der Kern deterministisch ist.
+
+### Der Regisseur als MCP-Client
+
+```
+Lernplattform ──Lehrauftrag──▶ Hermes (Regisseur, eigenes Modell)
+                                  │  MCP über HTTP, Bearer-Token
+                                  ▼
+                       apps/service  POST /mcp
+                         bibliothek_auflisten
+                         szenario_pruefen      ◀─ beliebig oft
+                         szenario_abschliessen ─▶ Szenarioablage
+                                  │ Studio-Link
+                                  ▼
+Lernplattform bettet ein: <iframe src="…/studio/?szenario=<kennung>">
+                                  │ GET /v1/scenarios/<kennung>
+                                  ▼
+                       Studio lädt, simuliert im Browser
+```
+
+Drei Entscheidungen:
+
+1. **Ein ganzes Szenario je Aufruf, keine Einzelschritte.** Das Szenario ist die
+   Quelle der Wahrheit; ein Werkzeug je Bearbeitung (`add_body`, `move` …)
+   hieße, die Bearbeitungslogik aus `scenarioEdits.ts` für das Modell ein
+   zweites Mal zu bauen und einen Zwischenstand auf dem Server zu pflegen. So
+   ist der MCP-Endpunkt zustandslos: je Anfrage ein frischer Server, nichts
+   geht bei einem Neustart verloren.
+2. **Bedieneinheiten im Entwurf.** Der `ScenarioDraft` nimmt Grad, volle
+   Kanten und Grad/s — dieselben Einheiten wie die rechte Leiste — und nur
+   Kennungen aus der Startbibliothek. Quaternionen, halbe Kanten und die
+   eingebettete Bibliothek erzeugt `assembleScenario`. Derselbe Grund wie beim
+   Bibliothekar: die Geometrie rechnet der Code.
+3. **Ablegen statt Durchreichen.** Ein Szenario mit Bibliothek hat schon bei einem Körper 4–8 kB;
+   es durch das Modell zur Plattform abschreiben zu lassen ist unzuverlässig,
+   und in eine URL passt es nicht. Der Regisseur bekommt einen Link, die
+   Plattform bettet ihn ein.
+
+Die Prüfung unterscheidet **Fehler** (Szenario wird nicht abgelegt: Schema,
+unbekannte Kennung, unpassender Änderungsschlüssel, Körper steckt mehr als 1 cm
+in einer Platte) von **Warnungen** (läuft, sieht aber nach einem Versehen aus:
+Körper fällt an allen Flächen vorbei, Eingriff nach dem Ende). Ein Körper neben
+der Rampe kann gewollt sein, einer in der Platte nie.
+
+Der API-Schlüssel des Dienstes spielt dabei keine Rolle: das Modell des
+Regisseurs bezahlt und konfiguriert Hermes.
 
 ---
 

@@ -1,0 +1,406 @@
+{
+  "schemaVersion": 1,
+  "id": "neues-szenario",
+  "name": "waagerechter Wurf",
+  "environment": {},
+  "library": [
+    {
+      "definition": {
+        "kind": "body",
+        "id": "quader",
+        "name": "Quader",
+        "behaviour": {
+          "bodyType": "cuboid",
+          "halfExtents": [
+            0.1,
+            0.1,
+            0.1
+          ]
+        }
+      },
+      "provenance": {
+        "source": "builtin",
+        "correctedFields": [],
+        "warnings": []
+      }
+    },
+    {
+      "definition": {
+        "kind": "material",
+        "id": "standard",
+        "name": "Standard",
+        "mechanical": {
+          "density": 1000,
+          "restitution": 0,
+          "staticFriction": 0.5,
+          "kineticFriction": 0.4,
+          "rollingFriction": 0.001
+        },
+        "appearance": {
+          "macroscopic": {
+            "color": "#4a5568",
+            "metalness": 0.1,
+            "roughness": 0.8,
+            "opacity": 1
+          },
+          "atomic": {
+            "atomColor": "#7b8494",
+            "atomRadius": 140,
+            "lattice": "amorphous",
+            "latticeConstant": 400
+          }
+        }
+      },
+      "provenance": {
+        "source": "builtin",
+        "correctedFields": [],
+        "warnings": []
+      }
+    },
+    {
+      "definition": {
+        "kind": "material",
+        "id": "glatt",
+        "name": "Glatt",
+        "mechanical": {
+          "density": 1000,
+          "restitution": 0,
+          "staticFriction": 0,
+          "kineticFriction": 0,
+          "rollingFriction": 0
+        },
+        "appearance": {
+          "macroscopic": {
+            "color": "#9fc4d8",
+            "metalness": 0.1,
+            "roughness": 0.1,
+            "opacity": 1
+          },
+          "atomic": {
+            "atomColor": "#b5d3e3",
+            "atomRadius": 140,
+            "lattice": "amorphous",
+            "latticeConstant": 400
+          }
+        }
+      },
+      "provenance": {
+        "source": "builtin",
+        "correctedFields": [],
+        "warnings": []
+      }
+    },
+    {
+      "definition": {
+        "kind": "material",
+        "id": "eisen",
+        "name": "Eisen",
+        "formula": "Fe",
+        "mechanical": {
+          "density": 7874,
+          "restitution": 0.4,
+          "staticFriction": 0.74,
+          "kineticFriction": 0.57,
+          "rollingFriction": 0.0005
+        },
+        "thermal": {
+          "specificHeatCapacity": 449,
+          "thermalConductivity": 80.4,
+          "emissivity": 0.3,
+          "meltingPoint": 1811,
+          "boilingPoint": 3134
+        },
+        "chemical": {
+          "molarMass": 55.845,
+          "atomicNumber": 26,
+          "neutronCount": 30
+        },
+        "appearance": {
+          "macroscopic": {
+            "color": "#8c8c94",
+            "metalness": 0.9,
+            "roughness": 0.35,
+            "opacity": 1
+          },
+          "atomic": {
+            "atomColor": "#b0b4bd",
+            "atomRadius": 126,
+            "lattice": "bcc",
+            "latticeConstant": 287
+          }
+        }
+      },
+      "provenance": {
+        "source": "builtin",
+        "correctedFields": [],
+        "warnings": []
+      }
+    },
+    {
+      "definition": {
+        "kind": "material",
+        "id": "aluminium",
+        "name": "Aluminium",
+        "formula": "Al",
+        "mechanical": {
+          "density": 2700,
+          "restitution": 0.35,
+          "staticFriction": 0.61,
+          "kineticFriction": 0.47,
+          "rollingFriction": 0.0007
+        },
+        "thermal": {
+          "specificHeatCapacity": 897,
+          "thermalConductivity": 237,
+          "emissivity": 0.1,
+          "meltingPoint": 933.47,
+          "boilingPoint": 2792
+        },
+        "chemical": {
+          "molarMass": 26.982,
+          "atomicNumber": 13,
+          "neutronCount": 14
+        },
+        "appearance": {
+          "macroscopic": {
+            "color": "#c8ccd2",
+            "metalness": 0.85,
+            "roughness": 0.3,
+            "opacity": 1
+          },
+          "atomic": {
+            "atomColor": "#d4d8de",
+            "atomRadius": 143,
+            "lattice": "fcc",
+            "latticeConstant": 405
+          }
+        }
+      },
+      "provenance": {
+        "source": "builtin",
+        "correctedFields": [],
+        "warnings": []
+      }
+    },
+    {
+      "definition": {
+        "kind": "material",
+        "id": "holz",
+        "name": "Holz",
+        "mechanical": {
+          "density": 700,
+          "restitution": 0.3,
+          "staticFriction": 0.45,
+          "kineticFriction": 0.35,
+          "rollingFriction": 0.0015
+        },
+        "thermal": {
+          "specificHeatCapacity": 1700,
+          "thermalConductivity": 0.12,
+          "emissivity": 0.9
+        },
+        "appearance": {
+          "macroscopic": {
+            "color": "#9a6b3f",
+            "metalness": 0,
+            "roughness": 0.9,
+            "opacity": 1
+          },
+          "atomic": {
+            "atomColor": "#a5763f",
+            "atomRadius": 140,
+            "lattice": "amorphous",
+            "latticeConstant": 400
+          }
+        }
+      },
+      "provenance": {
+        "source": "builtin",
+        "correctedFields": [],
+        "warnings": []
+      }
+    },
+    {
+      "definition": {
+        "kind": "constraint",
+        "id": "ebene",
+        "name": "Ebene",
+        "behaviour": {
+          "constraintType": "staticSurface",
+          "segments": [
+            {
+              "id": "flaeche",
+              "center": [
+                0,
+                0,
+                0
+              ],
+              "normal": [
+                0,
+                0,
+                1
+              ],
+              "tangent": [
+                1,
+                0,
+                0
+              ],
+              "halfExtentU": 1,
+              "halfExtentV": 2,
+              "thickness": 0.01
+            }
+          ]
+        }
+      },
+      "provenance": {
+        "source": "builtin",
+        "correctedFields": [],
+        "warnings": []
+      }
+    },
+    {
+      "definition": {
+        "kind": "load",
+        "id": "gravitation",
+        "name": "Gravitation",
+        "behaviour": {
+          "loadType": "gravity"
+        },
+        "appearance": {
+          "macroscopic": {
+            "color": "#5b6ee1",
+            "metalness": 0,
+            "roughness": 1,
+            "opacity": 1
+          }
+        }
+      },
+      "provenance": {
+        "source": "builtin",
+        "correctedFields": [],
+        "warnings": []
+      }
+    }
+  ],
+  "entities": [
+    {
+      "kind": "load",
+      "id": "schwerkraft",
+      "loadId": "gravitation",
+      "name": "Schwerkraft",
+      "opacity": 1,
+      "magnitude": 9.81,
+      "direction": [
+        0,
+        0,
+        -1
+      ]
+    },
+    {
+      "kind": "constraint",
+      "id": "ebene-2",
+      "constraintId": "ebene",
+      "materialId": "glatt",
+      "name": "Ebene",
+      "opacity": 1,
+      "pose": {
+        "position": [
+          0,
+          -2,
+          0
+        ],
+        "orientation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "kind": "body",
+      "id": "quader-2",
+      "bodyId": "quader",
+      "materialId": "aluminium",
+      "name": "Quader",
+      "opacity": 1,
+      "phase": {
+        "state": "solid",
+        "shape": {
+          "type": "box",
+          "halfExtents": [
+            0.1,
+            0.1,
+            0.1
+          ]
+        }
+      },
+      "pose": {
+        "position": [
+          0,
+          -3,
+          0.09999999988824151
+        ],
+        "orientation": [
+          -1.1102230246251565e-16,
+          0,
+          0,
+          1
+        ]
+      },
+      "velocity": {
+        "linear": [
+          0,
+          4,
+          0
+        ],
+        "angular": [
+          0,
+          0,
+          0
+        ]
+      },
+      "kinematic": false
+    }
+  ],
+  "duration": 2,
+  "interventions": [
+    {
+      "op": "add",
+      "t": 0,
+      "entityId": "schwerkraft"
+    },
+    {
+      "op": "add",
+      "t": 0,
+      "entityId": "ebene-2"
+    },
+    {
+      "op": "add",
+      "t": 0,
+      "entityId": "quader-2"
+    }
+  ],
+  "directionTrack": [],
+  "simulation": {
+    "dt": 0.001,
+    "recordRate": 20,
+    "seed": 1
+  },
+  "view": {
+    "layer": "kinematic",
+    "showAxes": true,
+    "camera": {
+      "position": [
+        10.437836376106993,
+        3.3059910592682313,
+        1.9027369777192598
+      ],
+      "target": [
+        0,
+        0.5001210656910815,
+        -3.1478290107196094
+      ]
+    }
+  }
+}

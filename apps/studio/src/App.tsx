@@ -13,7 +13,7 @@ import { LibraryPanel } from "./components/LibraryPanel.js";
 import { Timeline } from "./components/Timeline.js";
 import { ViewToolbar } from "./components/ViewToolbar.js";
 import { Viewport, type ViewportHandle } from "./components/Viewport.js";
-import { downloadScenario, openScenarioFile } from "./scenarioFile.js";
+import { downloadScenario, fetchStoredScenario, openScenarioFile } from "./scenarioFile.js";
 import {
   addChangeAt,
   addConstraint,
@@ -56,15 +56,20 @@ interface Notice {
   text: string;
 }
 
+/** Der Wert von `?szenario=`: "durchstich" oder die Kennung eines abgelegten Szenarios. */
+function requestedScenario(): string | null {
+  return new URLSearchParams(globalThis.location?.search ?? "").get("szenario");
+}
+
 /**
  * Das Startszenario ist leer. Das Durchstich-Szenario liegt im Quellcode und
  * ist zum Pruefen ueber `?szenario=durchstich` erreichbar - bequem fuer die
  * Entwicklung, ohne dass jeder Start mit einem Beispiel beginnt, das man erst
- * wegraeumen muss.
+ * wegraeumen muss. Jede andere Kennung ist ein abgelegtes Szenario; das kommt
+ * aus dem Netz und wird deshalb erst nach dem ersten Bild geladen (Effekt in `App`).
  */
 function initialScenario(): Scenario {
-  const requested = new URLSearchParams(globalThis.location?.search ?? "").get("szenario");
-  return requested === "durchstich" ? createInclinedPlaneScenario() : createEmptyScenario();
+  return requestedScenario() === "durchstich" ? createInclinedPlaneScenario() : createEmptyScenario();
 }
 
 export function App() {
@@ -202,6 +207,20 @@ export function App() {
     setIsPlaying(false);
     setResetToken((token) => token + 1);
   }, []);
+
+  // Ein Szenario, das der Regisseur abgelegt hat - so bettet die Lernplattform
+  // das Studio ein. Geladen wie eine Datei, damit Zeit und Kamera zuruecksetzen.
+  useEffect(() => {
+    const requested = requestedScenario();
+    if (!requested || requested === "durchstich") return;
+    const abort = new AbortController();
+    void fetchStoredScenario(requested, abort.signal).then((result) => {
+      if (abort.signal.aborted) return;
+      if (result.ok) loadScenario(result.scenario);
+      else setNotice({ kind: "error", text: `Szenario nicht ladbar: ${result.errors.join(" | ")}` });
+    });
+    return () => abort.abort();
+  }, [loadScenario]);
 
   const handleTime = useCallback((time: number, playing: boolean) => {
     setT(time);

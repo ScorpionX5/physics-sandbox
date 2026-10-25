@@ -10,7 +10,10 @@ import {
   type ValidationResult,
 } from "@sandbox/schema";
 import { runScenario, summarizeEntity } from "@sandbox/core";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { MissingCredentialsError, synthesizeEntry, type LibrarianModel } from "./librarian.js";
+import { createSandboxMcpServer } from "./mcp.js";
+import { createMemoryScenarioStore, type ScenarioStore } from "./scenarioStore.js";
 
 /**
  * Der HTTP-Dienst.
@@ -71,6 +74,16 @@ export interface ServerOptions {
    * nur eben ohne Bibliothekar.
    */
   librarian?: LibrarianModel;
+  /** Wo `szenario_abschliessen` ablegt und `/v1/scenarios/:id` liest. Ohne Angabe: im Speicher. */
+  store?: ScenarioStore;
+  /** Basisadresse des Studios fuer die Links, die der MCP-Server zurueckgibt. */
+  studioUrl?: string;
+  /**
+   * Ist er gesetzt, verlangt `/mcp` `Authorization: Bearer <token>`. Der
+   * Endpunkt legt Dateien ab und laeuft auf einem Server, den auch andere
+   * erreichen - ohne Token kann jeder dort schreiben.
+   */
+  mcpToken?: string;
   logger?: boolean;
 }
 
@@ -87,6 +100,8 @@ function toSynthesizeResponse(result: ValidationResult): z.infer<typeof Synthesi
 
 export function createServer(options: ServerOptions = {}): FastifyInstance {
   const app = Fastify({ logger: options.logger ?? false });
+  const store = options.store ?? createMemoryScenarioStore();
+  const studioUrl = options.studioUrl ?? "http://localhost:5173/";
 
   app.get("/v1/health", async () => ({
     status: "ok",
@@ -101,6 +116,47 @@ export function createServer(options: ServerOptions = {}): FastifyInstance {
 
   /** Das Durchstich-Szenario - damit das Plattform-Team etwas zum Abspielen hat. */
   app.get("/v1/scenarios/durchstich", async () => createInclinedPlaneScenario());
+
+  /** Ein vom Regisseur abgelegtes Szenario - das Studio laedt es ueber `?szenario=<kennung>`. */
+  app.get<{ Params: { id: string } }>("/v1/scenarios/:id", async (request, reply) => {
+    const scenario = await store.get(request.params.id);
+    if (!scenario) return reply.code(404).send({ errors: [`Kein Szenario mit der Kennung "${request.params.id}".`] });
+    return scenario;
+  });
+
+  /**
+   * Die Sandbox-Werkzeuge fuer den Regisseur, als MCP ueber Streamable HTTP.
+   *
+   * Zustandslos: je Anfrage ein frischer Server und Transport. Die Werkzeuge
+   * halten nichts zwischen zwei Aufrufen - ein Entwurf ist jedes Mal das ganze
+   * Szenario -, also gibt es keine Sitzung, die ein Neustart verlieren koennte.
+   */
+  app.post("/mcp", async (request, reply) => {
+    if (options.mcpToken && request.headers.authorization !== `Bearer ${options.mcpToken}`) {
+      return reply.code(401).send({ errors: ["Authorization: Bearer <MCP_TOKEN> fehlt oder stimmt nicht."] });
+    }
+    const server = createSandboxMcpServer({ store, studioUrl });
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true,
+    });
+    reply.hijack();
+    reply.raw.on("close", () => {
+      void transport.close();
+      void server.close();
+    });
+    await server.connect(transport);
+    await transport.handleRequest(request.raw, reply.raw, request.body);
+  });
+  // Ohne Sitzung gibt es keinen Rueckkanal (GET) und nichts zu beenden (DELETE).
+  for (const method of ["GET", "DELETE"] as const) {
+    app.route({
+      method,
+      url: "/mcp",
+      handler: async (_request, reply) =>
+        reply.code(405).header("allow", "POST").send({ errors: ["Nur POST - der MCP-Endpunkt ist zustandslos."] }),
+    });
+  }
 
   app.post("/v1/library/synthesize", async (request, reply) => {
     const parsed = SynthesizeRequest.safeParse(request.body);
@@ -238,6 +294,16 @@ export function openApiDocument(): unknown {
         get: {
           summary: "Das Durchstich-Szenario (Klotz auf der schiefen Ebene)",
           responses: { "200": jsonResponse("Szenario", schema(Scenario)) },
+        },
+      },
+      "/v1/scenarios/{id}": {
+        get: {
+          summary: "Ein vom Regisseur ueber MCP abgelegtes Szenario",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string", format: "uuid" } }],
+          responses: {
+            "200": jsonResponse("Szenario", schema(Scenario)),
+            "404": jsonResponse("Unbekannte Kennung", { type: "object" }),
+          },
         },
       },
       "/v1/library/synthesize": {

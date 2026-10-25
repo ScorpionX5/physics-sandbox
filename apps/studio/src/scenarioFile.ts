@@ -125,3 +125,21 @@ export async function openScenarioFile(): Promise<ParseResult | undefined> {
   if (!file) return undefined;
   return parseScenario(await file.text());
 }
+
+/**
+ * Laedt ein vom Regisseur abgelegtes Szenario vom Dienst (`?szenario=<kennung>`).
+ *
+ * Auch das ist fremde Eingabe und geht durch `parseScenario` - der Dienst hat
+ * es zwar geprueft, aber mit dem Schema, das er beim Ablegen hatte.
+ */
+export async function fetchStoredScenario(id: string, signal?: AbortSignal): Promise<ParseResult> {
+  let response: Response;
+  try {
+    response = await fetch(`/v1/scenarios/${encodeURIComponent(id)}`, signal ? { signal } : {});
+  } catch (error) {
+    return { ok: false, errors: [`Dienst nicht erreichbar: ${(error as Error).message}`] };
+  }
+  if (response.status === 404) return { ok: false, errors: [`Kein Szenario mit der Kennung "${id}".`] };
+  if (!response.ok) return { ok: false, errors: [`Dienst antwortet mit ${response.status}.`] };
+  return parseScenario(await response.text());
+}

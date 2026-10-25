@@ -8,8 +8,9 @@ Zwei Nutzergruppen, ein Kern:
 
 1. **Mensch am Werkzeug** — die Sandbox-Oberfläche (`apps/studio`).
 2. **KI-Agent als Autor** — eine Lernplattform übergibt einen Lehrtext, ein
-   Agent baut daraus ein Szenario. Die Grenze dafür steht (`apps/service`), der
-   Agent selbst noch nicht.
+   Agent (der **Regisseur**, in Hermes) baut daraus über MCP ein Szenario, das
+   die Plattform als eingebettetes Studio zeigt. Siehe
+   [Regisseur anbinden](#regisseur-anbinden-hermes).
 
 Das Ergebnis ist **keine Videodatei**, sondern eine abspielbare, weiter
 bedienbare Aufzeichnung: Kamera frei drehbar, Zeit scrubbar, Darstellungsebene
@@ -43,6 +44,35 @@ npm run service
 
 Ohne Zugangsdaten läuft der Dienst trotzdem; `/v1/library/synthesize` antwortet
 dann mit 503 und einem Hinweis.
+
+### Regisseur anbinden (Hermes)
+
+Der Dienst bietet unter `/mcp` die Sandbox-Werkzeuge an. Auf dem Server:
+
+```bash
+HOST=0.0.0.0 PORT=8787 \
+MCP_TOKEN=<langes-zufallstoken> \
+STUDIO_URL=https://plattform.example/studio/ \
+SCENARIO_DIR=/var/lib/physik-sandbox/szenarien \
+npm run service
+```
+
+In `~/.hermes/config.yaml`:
+
+```yaml
+mcp_servers:
+  physik:
+    url: https://sandbox.example/mcp
+    headers:
+      Authorization: "Bearer <langes-zufallstoken>"
+```
+
+Hermes sieht dann `mcp_physik_bibliothek_auflisten`, `mcp_physik_szenario_pruefen`
+und `mcp_physik_szenario_abschliessen`. Letzteres liefert einen Link
+`STUDIO_URL?szenario=<kennung>`, den die Plattform als `<iframe>` einbettet. Das
+Studio holt das Szenario über `/v1/scenarios/<kennung>` — dafür muss `/v1` unter
+der Adresse des Studios zum Dienst weitergeleitet werden, wie es der Vite-Proxy
+in der Entwicklung tut.
 
 ---
 
@@ -147,7 +177,7 @@ packages/
   render/   Darstellungsschicht: Three.js, ein Renderer je Ebene, Abspielkopf
 apps/
   studio/   Die Sandbox-Oberfläche (React + Vite + Three.js)
-  service/  Bibliothekar, Simulationsendpunkt, OpenAPI
+  service/  Bibliothekar, Simulationsendpunkt, Sandbox-Werkzeuge (MCP), OpenAPI
 ```
 
 Drei Eigenschaften tragen das:
@@ -243,7 +273,8 @@ Mit Absicht, in dieser Reihenfolge:
 | Thermodynamik | Stufe 3. Pipeline-Phase `exchange` ist registriert und leer. |
 | Chemie | Stufe 4. Phase `transform` leer; Elementbilanz-Prüfung steht schon. |
 | Subatomare, thermische, Feld-Ansicht | Schalenbesetzung wird berechnet, Renderer fehlen. |
-| **Regisseur** (Haupt-KI-Agent) und Sandbox-Werkzeuge | Die Werkzeugliste steht in der [Architektur](docs/architektur.md); `summarizeEntity` ist der geplante Rückkanal `inspect_recording` und schon gebaut. |
+| Neue Materialien durch den Regisseur | Der Regisseur wählt nur aus der Startbibliothek. Den Bibliothekar als viertes Werkzeug anzubieten wäre eine Ergänzung in `mcp.ts` und `assembleScenario`. |
+| Eigener Einbettungsmodus des Studios | Die Plattform bettet das volle Studio ein. Eine reduzierte Ansicht nur zum Abspielen fehlt. |
 | Videoexport | Deterministisch, also „Aufzeichnung offline rendern". |
 | `@sandbox/player` als eigenes npm-Paket | `RecordingViewer` ist schon einbettbar, nur noch nicht separat gepackt. |
 

@@ -1,4 +1,5 @@
 import { createClaudeLibrarian, type LibrarianModel } from "./librarian.js";
+import { createFileScenarioStore } from "./scenarioStore.js";
 import { createServer } from "./server.js";
 
 /**
@@ -12,6 +13,11 @@ import { createServer } from "./server.js";
 
 const PORT = Number(process.env["PORT"] ?? 8787);
 const HOST = process.env["HOST"] ?? "127.0.0.1";
+/** Wohin `szenario_abschliessen` ablegt. Relativ zum Arbeitsverzeichnis des Dienstes. */
+const SCENARIO_DIR = process.env["SCENARIO_DIR"] ?? "data/scenarios";
+/** Wo die Lernplattform das Studio ausliefert - daraus werden die Links. */
+const STUDIO_URL = process.env["STUDIO_URL"] ?? "http://localhost:5173/";
+const MCP_TOKEN = process.env["MCP_TOKEN"];
 
 /**
  * Ob Zugangsdaten vorhanden sind.
@@ -40,12 +46,22 @@ async function setUpLibrarian(): Promise<LibrarianModel | undefined> {
 }
 
 const librarian = await setUpLibrarian();
-const app = createServer({ ...(librarian ? { librarian } : {}), logger: true });
+if (!MCP_TOKEN && HOST !== "127.0.0.1" && HOST !== "localhost") {
+  console.warn(`MCP_TOKEN ist nicht gesetzt: /mcp ist auf ${HOST} fuer jeden erreichbar, der den Dienst erreicht.`);
+}
+const app = createServer({
+  ...(librarian ? { librarian } : {}),
+  store: createFileScenarioStore(SCENARIO_DIR),
+  studioUrl: STUDIO_URL,
+  ...(MCP_TOKEN ? { mcpToken: MCP_TOKEN } : {}),
+  logger: true,
+});
 
 try {
   await app.listen({ port: PORT, host: HOST });
   console.log(`Dienst laeuft auf http://${HOST}:${PORT}`);
   console.log(`OpenAPI-Schema: http://${HOST}:${PORT}/v1/openapi.json`);
+  console.log(`MCP (Sandbox-Werkzeuge): http://${HOST}:${PORT}/mcp`);
 } catch (error) {
   console.error(error);
   process.exit(1);

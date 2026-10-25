@@ -166,9 +166,12 @@ welcher der richtige ist.
 |---|---|---|
 | **Bibliothekar** | `Librarian` / `LibrarianModel` | Der eng umrissene KI-Aufruf: Text rein, geprüfter Bibliothekseintrag raus. Ein Aufruf, strukturierte Ausgabe, keine Werkzeuge. Modell: `claude-sonnet-5-5`. |
 | **Entwurf** | `LibrarianDraft` | Was das Modell liefert, bevor Code und Prüfung daraus einen Eintrag machen. |
-| **Regisseur** | `Director` | Der Haupt-KI-Agent: Lehrauftrag rein, vollständiges Szenario samt Regiespur raus. Agentenschleife mit Werkzeugen. Modell: `claude-opus-5-5`. **Noch nicht gebaut.** |
+| **Regisseur** | `Director` | Der Haupt-KI-Agent: Lehrauftrag rein, vollständiges Szenario samt Regiespur raus. Agentenschleife mit Werkzeugen. **Läuft nicht in diesem Repository**, sondern als Agent in Hermes (oder einem anderen MCP-Client), der die Sandbox-Werkzeuge aufruft; das Modell wählt der Client. |
 | **Lehrauftrag** | `Brief` | Die Eingabe an den Regisseur: Lehrtext, Lernziel, optional Lernerprofil. |
-| **Sandbox-Werkzeuge** | `SandboxTools` | Die Werkzeugoberfläche für den Regisseur. **Noch nicht gebaut.** |
+| **Sandbox-Werkzeuge** | `createSandboxMcpServer` | Die Werkzeugoberfläche für den Regisseur, als MCP-Server unter `/mcp`: `bibliothek_auflisten`, `szenario_pruefen`, `szenario_abschliessen`. |
+| **Szenarioentwurf** | `ScenarioDraft` | Was der Regisseur schreibt: ein ganzes Szenario in Bedieneinheiten (Grad, volle Kanten, Grad/s, nur Kennungen aus der Startbibliothek). `assembleScenario` macht daraus ein `Scenario`. Nicht zu verwechseln mit dem **Entwurf** des Bibliothekars. |
+| **Prüfbericht** | `InspectionReport` | Antwort von `szenario_pruefen`: Fehler, Warnungen und je Körper die Zusammenfassung des Laufs. Der Rückkanal, früher als `inspect_recording` geplant. |
+| **Szenarioablage** | `ScenarioStore` | Wo ein abgeschlossenes Szenario liegt, bis das Studio es über `?szenario=<kennung>` lädt. Eine Datei je Szenario, die Kennung ist eine UUID. |
 | **Prüfung** | `Validation` / `ValidationResult` | Schema- und Plausibilitätsprüfung jeder KI-Ausgabe. Es gibt keinen Weg an ihr vorbei in die Bibliothek. |
 | **Herkunft** | `Provenance` | Woher ein Eintrag kommt, welches Modell, welcher Prompt, was korrigiert wurde. |
 
