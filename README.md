@@ -166,6 +166,19 @@ Gegenproben, die etwas aussagen:
 - Den **Auslauf verkürzen** (rechts anklicken, Größe `L` auf 1 m): der Klotz
   fällt hinten herunter. Die Instanzgröße wirkt wirklich auf die Physik.
 
+### Weitere Beispiele
+
+In `examples/` liegen fertige Szenarien, die sich über **Laden** öffnen lassen:
+
+| Datei | Inhalt |
+|---|---|
+| `zentraler-stoss.scenario.json` | Eisen- und Aluminiumquader stoßen mittig, ohne Schwerkraft |
+| `aussermittiger-stoss.scenario.json` | dieselben Quader, versetzt — der Stoß bringt sie ins Drehen |
+| `collision.scenario.json` | zwei 1 m lange Stäbe treffen sich versetzt mit je 20 m/s |
+| `waagerechter-wurf.scenario.json` | Aluminiumquader gleitet über eine glatte Ebene und fliegt über die Kante waagerecht ab |
+| `bouncing.scenario.json` | drei Quader aus Eisen, Holz und Aluminium fallen auf Eisenebenen |
+| `schiefe-ebene.scenario.json` | Holzquader auf Aluminiumrampe; Zusatzlast ab 2,7 s, die Rampe wird bei 3 s gedreht |
+
 ---
 
 ## Aufbau
@@ -203,7 +216,7 @@ welche Dateien anzufassen sind.
 ## Verifikation
 
 ```bash
-npm test          # 360 Tests über fünf Pakete
+npm test          # 373 Tests über fünf Pakete
 npm run typecheck # alle Pakete
 ```
 
