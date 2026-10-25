@@ -1,0 +1,33 @@
+# Abhängigkeiten
+node_modules/
+
+# Build-Ausgaben
+dist/
+build/
+*.tsbuildinfo
+.vite/
+.turbo/
+
+# Testabdeckung
+coverage/
+
+# Umgebungsvariablen (der API-Schlüssel bleibt im Service und gehört nie ins Repository)
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor und Betriebssystem
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Claude Code (lokale Einstellungen)
+.claude/settings.local.json

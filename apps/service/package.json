@@ -1,0 +1,24 @@
+{
+  "name": "@sandbox/service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "dev": "node --import tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node ../../scripts/run-tests.mjs",
+    "librarian": "node --import tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
+    "@sandbox/core": "*",
+    "@sandbox/schema": "*",
+    "fastify": "^5.2.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.0",
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "physics-sandbox",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Interaktive 3D-Sandbox fuer Physik und Chemie",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "dev": "npm run dev -w @sandbox/studio",
+    "service": "npm run dev -w @sandbox/service"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  }
+}
